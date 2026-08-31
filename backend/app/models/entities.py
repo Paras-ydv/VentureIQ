@@ -1,0 +1,365 @@
+"""ORM models implementing docs/DATA_SCHEMA.md.
+
+Field names and semantics track that document. Where the schema marks a field
+as enrichment-only (lock icon) or derived, that is noted in a comment here so
+nobody wires it to a founder-editable form field by accident.
+"""
+
+from __future__ import annotations
+
+import uuid
+from datetime import UTC, datetime
+
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    Date,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+)
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from app.core.database import Base
+
+
+def _uuid() -> str:
+    return str(uuid.uuid4())
+
+
+def _now() -> datetime:
+    return datetime.now(UTC)
+
+
+# --------------------------------------------------------------------------
+# Startup side
+# --------------------------------------------------------------------------
+
+
+class Startup(Base):
+    __tablename__ = "startup"
+
+    startup_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    legal_name: Mapped[str] = mapped_column(String(255), index=True)
+    slug: Mapped[str | None] = mapped_column(String(255), index=True)
+
+    # Enrichment-verified identifiers --- never trusted from the form alone.
+    cin: Mapped[str | None] = mapped_column(String(32))
+    gstin: Mapped[str | None] = mapped_column(String(32))
+
+    stage: Mapped[str] = mapped_column(String(32), index=True)  # idea|seed|series_a|...
+    sector: Mapped[str] = mapped_column(String(96), index=True)
+    sub_vertical: Mapped[str | None] = mapped_column(String(160))
+
+    founded_date: Mapped[datetime | None] = mapped_column(Date)
+    hq_city: Mapped[str | None] = mapped_column(String(96), index=True)
+    hq_state: Mapped[str | None] = mapped_column(String(96))
+    registered_address: Mapped[str | None] = mapped_column(Text)
+    website: Mapped[str | None] = mapped_column(String(512))
+
+    one_liner: Mapped[str | None] = mapped_column(Text)
+    long_description: Mapped[str | None] = mapped_column(Text)
+    employee_count: Mapped[int | None] = mapped_column(Integer)
+
+    # Outcome label. Populated for imported historical companies (YC has real
+    # labels); null for live registrations, which have not resolved yet.
+    status: Mapped[str | None] = mapped_column(String(32), index=True)
+
+    source: Mapped[str] = mapped_column(String(32), default="registration")
+    verified: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_now, onupdate=_now)
+
+    financials: Mapped[list[StartupFinancials]] = relationship(
+        back_populates="startup", cascade="all, delete-orphan"
+    )
+    founders: Mapped[list[Founder]] = relationship(
+        back_populates="startup", cascade="all, delete-orphan"
+    )
+    documents: Mapped[list[StartupDocument]] = relationship(
+        back_populates="startup", cascade="all, delete-orphan"
+    )
+    enrichments: Mapped[list[EnrichmentRecord]] = relationship(
+        back_populates="startup", cascade="all, delete-orphan"
+    )
+    fraud_signals: Mapped[list[FraudSignal]] = relationship(
+        back_populates="startup", cascade="all, delete-orphan"
+    )
+    scores: Mapped[list[Score]] = relationship(
+        back_populates="startup", cascade="all, delete-orphan"
+    )
+
+    @property
+    def latest_financials(self) -> StartupFinancials | None:
+        if not self.financials:
+            return None
+        return max(self.financials, key=lambda f: f.as_of_date or datetime.min.date())
+
+    @property
+    def latest_score(self) -> Score | None:
+        if not self.scores:
+            return None
+        return max(self.scores, key=lambda s: s.computed_at)
+
+
+class StartupFinancials(Base):
+    __tablename__ = "startup_financials"
+
+    financial_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    startup_id: Mapped[str] = mapped_column(ForeignKey("startup.startup_id"), index=True)
+    as_of_date: Mapped[datetime | None] = mapped_column(Date)
+
+    revenue: Mapped[float | None] = mapped_column(Float)
+    burn_rate_monthly: Mapped[float | None] = mapped_column(Float)
+    cash_balance: Mapped[float | None] = mapped_column(Float)
+    cac: Mapped[float | None] = mapped_column(Float)
+    ltv: Mapped[float | None] = mapped_column(Float)
+    tam_usd: Mapped[float | None] = mapped_column(Float)
+    sam_usd: Mapped[float | None] = mapped_column(Float)
+    active_users: Mapped[int | None] = mapped_column(Integer)
+    mrr: Mapped[float | None] = mapped_column(Float)
+    arr: Mapped[float | None] = mapped_column(Float)
+    prior_year_revenue: Mapped[float | None] = mapped_column(Float)
+    total_funding_usd: Mapped[float | None] = mapped_column(Float)
+
+    # Enrichment-only: cross-checked against GSTN filings, compared to `revenue`.
+    gst_reported_revenue: Mapped[float | None] = mapped_column(Float)
+
+    startup: Mapped[Startup] = relationship(back_populates="financials")
+
+    @property
+    def runway_months(self) -> float | None:
+        """Derived --- never accepted from the form."""
+        if not self.burn_rate_monthly or self.burn_rate_monthly <= 0:
+            return None
+        return round((self.cash_balance or 0) / self.burn_rate_monthly, 1)
+
+    @property
+    def ltv_cac_ratio(self) -> float | None:
+        if not self.cac or self.cac <= 0 or self.ltv is None:
+            return None
+        return round(self.ltv / self.cac, 2)
+
+    @property
+    def revenue_growth_pct(self) -> float | None:
+        if not self.prior_year_revenue or self.prior_year_revenue <= 0:
+            return None
+        return round(((self.revenue or 0) - self.prior_year_revenue) / self.prior_year_revenue * 100, 1)
+
+
+class Founder(Base):
+    __tablename__ = "founder"
+
+    founder_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    startup_id: Mapped[str] = mapped_column(ForeignKey("startup.startup_id"), index=True)
+    name: Mapped[str] = mapped_column(String(160))
+    role: Mapped[str | None] = mapped_column(String(96))
+    linkedin_url: Mapped[str | None] = mapped_column(String(512))
+    github_username: Mapped[str | None] = mapped_column(String(96))
+
+    # Everything below is enrichment-only.
+    linkedin_employment_history: Mapped[dict | None] = mapped_column(JSON)
+    prior_exits: Mapped[int | None] = mapped_column(Integer)
+    domain_experience_years: Mapped[float | None] = mapped_column(Float)
+    github_commit_count_90d: Mapped[int | None] = mapped_column(Integer)
+    github_contributor_count: Mapped[int | None] = mapped_column(Integer)
+    github_followers: Mapped[int | None] = mapped_column(Integer)
+    linkedin_endorsement_count: Mapped[int | None] = mapped_column(Integer)
+
+    startup: Mapped[Startup] = relationship(back_populates="founders")
+
+
+class StartupDocument(Base):
+    __tablename__ = "startup_document"
+
+    document_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    startup_id: Mapped[str] = mapped_column(ForeignKey("startup.startup_id"), index=True)
+    doc_type: Mapped[str] = mapped_column(String(48))
+    filename: Mapped[str | None] = mapped_column(String(512))
+    s3_key: Mapped[str | None] = mapped_column(String(512))
+    ocr_text: Mapped[str | None] = mapped_column(Text)
+    layoutlm_entities: Mapped[dict | None] = mapped_column(JSON)
+    extraction_confidence: Mapped[float | None] = mapped_column(Float)
+    deviation_flags: Mapped[list | None] = mapped_column(JSON)
+    uploaded_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+
+    startup: Mapped[Startup] = relationship(back_populates="documents")
+
+
+class EnrichmentRecord(Base):
+    """One row per agentic source call. Cached for `enrichment_cache_days`."""
+
+    __tablename__ = "enrichment_record"
+
+    enrichment_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    startup_id: Mapped[str] = mapped_column(ForeignKey("startup.startup_id"), index=True)
+    source: Mapped[str] = mapped_column(String(32), index=True)  # github|mca21|gstn|linkedin|whois
+    is_mock: Mapped[bool] = mapped_column(Boolean, default=False)
+    query_params: Mapped[dict | None] = mapped_column(JSON)
+    raw_response: Mapped[dict | None] = mapped_column(JSON)
+    status: Mapped[str] = mapped_column(String(32))  # success|failed|cached_fallback
+    error: Mapped[str | None] = mapped_column(Text)
+    retry_count: Mapped[int] = mapped_column(Integer, default=0)
+    retrieved_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+
+    startup: Mapped[Startup] = relationship(back_populates="enrichments")
+
+
+class FraudSignal(Base):
+    __tablename__ = "fraud_signal"
+
+    signal_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    startup_id: Mapped[str] = mapped_column(ForeignKey("startup.startup_id"), index=True)
+    detector: Mapped[str] = mapped_column(String(48))  # isolation_forest|autoencoder|rule
+    anomaly_score: Mapped[float] = mapped_column(Float)
+    reconstruction_error: Mapped[float | None] = mapped_column(Float)
+    flagged_fields: Mapped[list | None] = mapped_column(JSON)
+    severity: Mapped[str] = mapped_column(String(16), default="low")  # low|medium|high
+    explanation: Mapped[str | None] = mapped_column(Text)
+    reviewed_by_human: Mapped[bool] = mapped_column(Boolean, default=False)
+    run_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+
+    startup: Mapped[Startup] = relationship(back_populates="fraud_signals")
+
+
+class Score(Base):
+    """Four independent scores plus a weighted composite.
+
+    Kept independent deliberately --- report section 8.3 cites the Maarouf et al.
+    ablation showing early fusion underperforms. Do not refactor into one head.
+    """
+
+    __tablename__ = "score"
+
+    score_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    startup_id: Mapped[str] = mapped_column(ForeignKey("startup.startup_id"), index=True)
+
+    growth_potential_score: Mapped[float] = mapped_column(Float)
+    risk_level_score: Mapped[float] = mapped_column(Float)
+    fraud_likelihood_score: Mapped[float] = mapped_column(Float)
+    founder_credibility_score: Mapped[float] = mapped_column(Float)
+    composite_score: Mapped[float] = mapped_column(Float)
+
+    # Top-3 contributing features per score, plus generated text rationale.
+    shap_top_features: Mapped[dict | None] = mapped_column(JSON)
+    rationale: Mapped[dict | None] = mapped_column(JSON)
+
+    confidence: Mapped[str] = mapped_column(String(16), default="high")  # high|low
+    cohort_size: Mapped[int | None] = mapped_column(Integer)
+    model_version: Mapped[str] = mapped_column(String(48))
+    computed_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+
+    startup: Mapped[Startup] = relationship(back_populates="scores")
+
+
+# --------------------------------------------------------------------------
+# Investor side
+# --------------------------------------------------------------------------
+
+
+class Investor(Base):
+    __tablename__ = "investor"
+
+    investor_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    name: Mapped[str] = mapped_column(String(200))
+    email: Mapped[str | None] = mapped_column(String(255), index=True)
+    investor_type: Mapped[str] = mapped_column(String(32))  # angel|vc_fund|family_office
+    firm_name: Mapped[str | None] = mapped_column(String(200))
+    sebi_registration_no: Mapped[str | None] = mapped_column(String(64))
+    kyc_status: Mapped[str] = mapped_column(String(24), default="pending")
+    accredited_investor: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+
+    preference: Mapped[InvestorPreference | None] = relationship(
+        back_populates="investor", uselist=False, cascade="all, delete-orphan"
+    )
+    events: Mapped[list[BehavioralEvent]] = relationship(
+        back_populates="investor", cascade="all, delete-orphan"
+    )
+
+
+class InvestorPreference(Base):
+    __tablename__ = "investor_preference"
+
+    investor_id: Mapped[str] = mapped_column(
+        ForeignKey("investor.investor_id"), primary_key=True
+    )
+    ticket_size_min: Mapped[float | None] = mapped_column(Float)
+    ticket_size_max: Mapped[float | None] = mapped_column(Float)
+    stage_preference: Mapped[list | None] = mapped_column(JSON)
+    preferred_sectors: Mapped[list | None] = mapped_column(JSON)
+    geographic_preference: Mapped[list | None] = mapped_column(JSON)
+    risk_tolerance: Mapped[str] = mapped_column(String(16), default="medium")
+
+    investor: Mapped[Investor] = relationship(back_populates="preference")
+
+
+class BehavioralEvent(Base):
+    """Kafka-stream equivalent. In the report this arrives via Kafka and lands
+    in `event_log`; at MVP scale we write straight to the table and keep the
+    same shape so a Kafka producer can be dropped in front later.
+    """
+
+    __tablename__ = "behavioral_event"
+
+    event_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    investor_id: Mapped[str] = mapped_column(ForeignKey("investor.investor_id"), index=True)
+    startup_id: Mapped[str | None] = mapped_column(
+        ForeignKey("startup.startup_id"), index=True
+    )
+    event_type: Mapped[str] = mapped_column(String(48), index=True)
+    event_value: Mapped[dict | None] = mapped_column(JSON)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime, default=_now, index=True)
+
+    investor: Mapped[Investor] = relationship(back_populates="events")
+
+
+class FundingRound(Base):
+    """Historical funding events --- seeded from the Indian funding CSVs and used
+    to build the co-investment graph.
+    """
+
+    __tablename__ = "funding_round"
+
+    round_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    startup_id: Mapped[str] = mapped_column(ForeignKey("startup.startup_id"), index=True)
+    round_stage: Mapped[str | None] = mapped_column(String(64))
+    amount_usd: Mapped[float | None] = mapped_column(Float)
+    announced_date: Mapped[datetime | None] = mapped_column(Date)
+    investor_names: Mapped[list | None] = mapped_column(JSON)
+
+
+class Listing(Base):
+    """Marketplace listing.
+
+    NOTE: escrow/settlement here is a SIMULATION. Real escrow and equity
+    transfer are SEBI/RBI-regulated activity --- see docs/BUILD_PLAN.md Problem 1.
+    No real payment rail is or should be wired to this table.
+    """
+
+    __tablename__ = "listing"
+
+    listing_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    startup_id: Mapped[str] = mapped_column(ForeignKey("startup.startup_id"), index=True)
+    ask_amount: Mapped[float] = mapped_column(Float)
+    equity_offered_pct: Mapped[float | None] = mapped_column(Float)
+    fair_value_estimate: Mapped[float | None] = mapped_column(Float)
+    status: Mapped[str] = mapped_column(String(24), default="open")
+    simulated: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_log"
+
+    log_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    actor_id: Mapped[str | None] = mapped_column(String(36))
+    action: Mapped[str] = mapped_column(String(96))
+    entity_type: Mapped[str | None] = mapped_column(String(64))
+    entity_id: Mapped[str | None] = mapped_column(String(36))
+    detail: Mapped[dict | None] = mapped_column(JSON)
+    timestamp: Mapped[datetime] = mapped_column(DateTime, default=_now, index=True)
