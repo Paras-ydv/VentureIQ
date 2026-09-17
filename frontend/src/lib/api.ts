@@ -1,4 +1,7 @@
-const BASE = "/api";
+// Same-origin "/api" in dev (Vite proxies it) and wherever the API is served
+// from the same host. On a static host such as Vercel, set VITE_API_BASE to the
+// backend's public URL at build time, e.g. https://api.example.com/api
+const BASE = (import.meta.env.VITE_API_BASE ?? "/api").replace(/\/$/, "");
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
@@ -197,6 +200,116 @@ export interface Benchmark {
   narrative: string;
 }
 
+/** Column-oriented so ~1,800 points stay small on the wire. */
+export interface ConstellationData {
+  sectors: string[];
+  count: number;
+  id: string[];
+  name: string[];
+  sector: number[];
+  score: number[];
+  fraud: number[];
+  verified: boolean[];
+}
+
+/* ---------------------------------------------------------- onboarding */
+
+export type EvidenceKind = "network" | "dataset" | "local" | "mock";
+export type FieldStatus = "verified" | "fetched" | "claimed" | "conflict" | "disputed" | "missing" | "empty";
+
+export interface Evidence {
+  source: string;
+  tool: string;
+  label: string;
+  kind: EvidenceKind;
+  value: any;
+  note: string;
+  suggest: boolean;
+  verdict?: "agree" | "disagree" | "neutral" | "picked";
+}
+
+export interface LedgerField {
+  key: string;
+  label: string;
+  group: "Company" | "Registry" | "Presence" | "Financials";
+  required: boolean;
+  founder_only: boolean;
+  readonly: boolean;
+  hint: string;
+  value: any;
+  origin: "founder" | "agent";
+  status: FieldStatus;
+  note: string;
+  suggestion: { value: any; source: string } | null;
+  warn: boolean;
+  evidence: Evidence[];
+}
+
+export interface OnboardFounder {
+  name: string;
+  role: string | null;
+  github: string | null;
+  linkedin: string | null;
+  source: "founder" | "website";
+  check: { status: FieldStatus; note: string } | null;
+}
+
+export interface OnboardSnapshot {
+  session_id: string;
+  status: "running" | "ready" | "submitted";
+  inputs: Record<string, any>;
+  ledger: { fields: LedgerField[]; counts: Partial<Record<FieldStatus, number>>; blocking: string[] };
+  founders: OnboardFounder[];
+  facts: Record<string, any>;
+  gst_consent: boolean;
+  startup_id: string | null;
+}
+
+export type AgentEvent = { seq: number; t: number } & (
+  | { type: "start"; domain: string | null }
+  | { type: "thought"; text: string }
+  | { type: "plan"; id: string; tool: string; label: string; kind: EvidenceKind; reason: string }
+  | { type: "step"; id: string; tool: string; status: "running" }
+  | { type: "step_done"; id: string; tool: string; ok: boolean; summary: string; ms: number }
+  | ({ type: "finding"; field: string; tool: string | null } & Evidence)
+  | { type: "done" }
+  | { type: "submitted"; startup_id: string }
+);
+
+export interface RegistryCompany {
+  cin: string;
+  name: string;
+  status: string | null;
+  class: string | null;
+  category: string | null;
+  registered: string | null;
+  state: string | null;
+  city: string | null;
+  industry: string | null;
+  paidup_capital: number | null;
+  address: string | null;
+  startup_id?: string | null;
+  how?: "local" | "live";
+}
+
+export interface RegistryStatus {
+  available: boolean;
+  companies: number;
+  source_total?: number | null;
+  source_updated?: string | null;
+  complete?: boolean;
+  source: string;
+}
+
+export interface AgentTool {
+  id: string;
+  label: string;
+  kind: EvidenceKind;
+  what: string;
+  how: string;
+  consent: string;
+}
+
 export interface Alert {
   signal_id: string;
   startup_id: string;
@@ -227,6 +340,7 @@ export const api = {
   fundingTimeline: () =>
     request<{ year: number; rounds: number; total_usd: number }[]>("/stats/funding-timeline"),
   cities: () => request<{ city: string; count: number }[]>("/stats/cities"),
+  constellation: (limit = 1800) => request<ConstellationData>(`/stats/constellation?limit=${limit}`),
   modelMetrics: () => request<any>("/model/metrics"),
   alerts: (limit = 20) => request<Alert[]>(`/alerts?limit=${limit}`),
   auditLog: (limit = 50) => request<any[]>(`/audit?limit=${limit}`),
@@ -276,6 +390,46 @@ export const api = {
       body: JSON.stringify(body),
       keepalive: true,
     }).catch(() => undefined),
+
+  registryStatus: () => request<RegistryStatus>("/registry/status"),
+  registrySearch: (q: string, opts: { limit?: number; active_only?: boolean; state?: string } = {}) => {
+    const qs = new URLSearchParams({ q, limit: String(opts.limit ?? 8) });
+    if (opts.active_only) qs.set("active_only", "true");
+    if (opts.state) qs.set("state", opts.state);
+    return request<{ items: RegistryCompany[]; source: string; registry: { companies: number; complete: boolean } }>(
+      `/registry/search?${qs}`,
+    );
+  },
+
+  onboardTools: () => request<{ tools: AgentTool[] }>("/onboarding/tools"),
+  onboardStart: (body: Record<string, unknown>) =>
+    request<{ session_id: string }>("/onboarding/sessions", { method: "POST", body: JSON.stringify(body) }),
+  onboardSnapshot: (id: string) => request<OnboardSnapshot>(`/onboarding/sessions/${id}`),
+  /** Live trace. The caller closes the stream when `onSnapshot` fires. */
+  onboardEvents: (
+    id: string,
+    h: { onEvent: (e: AgentEvent) => void; onState: (s: OnboardSnapshot) => void; onSnapshot: (s: OnboardSnapshot) => void; onError: () => void },
+  ) => {
+    const es = new EventSource(`${BASE}/onboarding/sessions/${id}/events`);
+    es.onmessage = (m) => h.onEvent(JSON.parse(m.data));
+    es.addEventListener("state", (m) => h.onState(JSON.parse((m as MessageEvent).data)));
+    es.addEventListener("snapshot", (m) => {
+      es.close();
+      h.onSnapshot(JSON.parse((m as MessageEvent).data));
+    });
+    es.onerror = () => {
+      if (es.readyState === EventSource.CLOSED) h.onError();
+    };
+    return () => es.close();
+  },
+  onboardEdit: (id: string, edits: { key: string; value?: unknown; resolution?: "accept" | "keep" }[]) =>
+    request<OnboardSnapshot>(`/onboarding/sessions/${id}/fields`, { method: "PATCH", body: JSON.stringify(edits) }),
+  onboardFounders: (id: string, founders: Omit<OnboardFounder, "source" | "check">[]) =>
+    request<OnboardSnapshot>(`/onboarding/sessions/${id}/founders`, { method: "PUT", body: JSON.stringify(founders) }),
+  onboardCheckFounder: (id: string, i: number) =>
+    request<OnboardSnapshot>(`/onboarding/sessions/${id}/founders/${i}/check`, { method: "POST" }),
+  onboardSubmit: (id: string) =>
+    request<{ startup_id: string }>(`/onboarding/sessions/${id}/submit`, { method: "POST" }),
 
   valuation: (id: string) => request<any>(`/marketplace/valuation/${id}`),
   listings: () => request<{ disclaimer: string; items: any[] }>("/marketplace/listings"),
