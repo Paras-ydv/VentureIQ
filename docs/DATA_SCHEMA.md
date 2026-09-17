@@ -85,7 +85,8 @@ enrichment/verification) · 🧮 derived/computed, never user-entered.
 |---|---|---|
 | `enrichment_id` | UUID **PK** | |
 | `startup_id` | FK | |
-| `source` | enum(`linkedin`,`mca21`,`gstn`,`github`,`whois`) | |
+| `source` | enum(`linkedin`,`mca21`,`gstn`,`github`,`whois`, plus onboarding: `website`,`dns`,`email`,`corpus`,`sector_model`,`github_org`,`linkedin_company`,`cin_check`,`gstin_check`,`city_state`) | `whois` is a live RDAP lookup |
+| `is_mock` | bool | true only for consent-/fee-gated stand-ins; never counts as verification |
 | `query_params` | jsonb | |
 | `raw_response` | jsonb | cached for 30 days per report §8.1.3 |
 | `status` | enum(`success`,`failed`,`cached_fallback`) | |
@@ -103,6 +104,42 @@ enrichment/verification) · 🧮 derived/computed, never user-entered.
 | `flagged_fields` | jsonb | e.g. `["revenue_vs_gstn", "burn_rate_industry_norm"]` |
 | `reviewed_by_human` | bool | report §8.1.5 — algorithms flag, humans decide |
 | `run_at` | timestamp | |
+
+### 1.7 `onboarding_session` (agentic registration, before a `startup` exists)
+| Field | Type | Notes |
+|---|---|---|
+| `session_id` | UUID **PK** | |
+| `status` | enum(`running`,`ready`,`submitted`) | |
+| `inputs` | jsonb | what the founder typed: website, work email, name, stage; optional CIN, GSTIN, GST consent |
+| `evidence` | jsonb | field → list of `{source, label, kind, value, note}`; `kind` ∈ `network`,`dataset`,`local`,`mock` |
+| `overrides` | jsonb | founder edits and conflict resolutions (`accept` / `keep`) |
+| `tool_results` | jsonb | per-step summary, payload, timing, and agent facts |
+| `events` | jsonb | the streamed trace (plans, reasons, findings) — kept for audit |
+| `startup_id` | FK, nullable | set on submit |
+| `created_at` / `updated_at` | timestamp | |
+
+Field statuses derived from `evidence` (not stored): `verified` (an independent
+source agrees — live lookup or public dataset), `fetched`, `claimed`,
+`conflict`, `disputed` (founder kept a value a source contradicts → a
+`fraud_signal` rule row on submit), `missing`. Mocked and locally computed
+evidence can support a value but never verify it.
+
+### 1.8 `company` (India company registry — separate file `backend/registry.db`)
+Imported from MCA Company Master Data; read-only reference data, not a startup profile.
+| Field | Type | Notes |
+|---|---|---|
+| `cin` | text **PK** | CIN, or LLPIN for LLPs (`is_llp`) |
+| `name` | text | registered name (FTS5-indexed as `company_fts`) |
+| `status` | text | Active, Strike Off, Under liquidation, … — non-Active is flagged at registration |
+| `class`, `category`, `sub_category` | text | |
+| `authorized_capital`, `paidup_capital` | float (INR) | |
+| `registered` | date | incorporation date → `founded_year` evidence |
+| `state`, `roc`, `address` | text | registered office |
+| `city` | text 🧮 | parsed from `address` |
+| `nic_code`, `industry` | text | |
+| `listed` | text | |
+
+A `startup` is linked to a registry company by `startup.cin`.
 
 ---
 

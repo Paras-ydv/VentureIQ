@@ -14,6 +14,42 @@ bulk-collected the same way).
 | `yc_companies_all.json` | 6,151 | 2005–2026 (all YC batches) | [yc-oss/api](https://github.com/yc-oss/api) — unofficial, auto-updated daily from YC's public Algolia index, MIT-licensed repo | Global, not India-specific, but has **outcome labels** (`status`: Active / Inactive / Acquired / Public) — closest public analogue to the labeled dataset used in Maarouf et al. 2025 (the fused-LLM paper VentureIQ's report cites) |
 | `yc_companies_india.json` | 222 | subset of above | Filtered where `all_locations` or `regions` contains "India" | Small — useful for spot checks, not enough alone to train a model |
 
+## India's company registry (bulk, stored outside the repo)
+
+| Dataset | Rows | Updated | Source | License |
+|---|---|---|---|---|
+| MCA "Registrars of Companies (RoC)-wise Company Master Data" | 36,74,314 | 22 Jul 2026 | Ministry of Corporate Affairs via [data.gov.in](https://www.data.gov.in/resource/registrars-companies-roc-wise-company-master-data) (resource `4dbe5667-7b6b-41d7-82af-211562424d9a`) | [Government Open Data License – India](https://www.data.gov.in/Godl) — attribution required |
+
+Fields: CIN/LLPIN, registered name, status, class, category, authorised and
+paid-up capital, registration date, state, RoC, registered office address,
+NIC code, industrial classification. No financials and no people.
+
+This is too big for git. `backend/scripts/import_mca_registry.py` downloads it
+into `backend/registry.db` (gitignored, separate from the main database so
+`bootstrap.py` never wipes it) with a full-text name index. It needs a free
+data.gov.in API key in `VIQ_DATA_GOV_IN_KEY`; the public sample key returns
+10 rows per call and is rate-limited, which is only enough for single-CIN
+lookups. The registry replaces the MCA21 mock during registration.
+
+It is a registry of *companies*, not startups: most rows are traditional
+businesses. Records are searchable and claimable, but are not scored or listed
+in Discover as startups until a founder registers them.
+
+## Live sources queried at registration time (nothing stored in bulk)
+
+The agentic registration flow (`backend/app/onboarding/`) queries these one
+company at a time, only for the company being registered:
+
+| Source | What is read | Access / terms |
+|---|---|---|
+| The company's own website | Homepage (and `/about` if thin): title, meta description, schema.org `Organization` JSON-LD, outbound profile links | URL supplied by the founder; `robots.txt` honoured; public addresses only; 1.5 MB cap |
+| RDAP via [rdap.org](https://rdap.org) | Domain registration date and registrar | Public registry data (ICANN RDAP); registrant personal data is redacted and not used |
+| DNS-over-HTTPS ([dns.google](https://developers.google.com/speed/public-dns/docs/doh/json)) | MX records for the website and email domains | Public DNS |
+| GitHub REST API | Org profile, public repos; founder user profiles | Public API, 60 req/h unauthenticated (`VIQ_GITHUB_TOKEN` raises it to 5,000) |
+| data.gov.in MCA master data API | One company by exact CIN or registered name, when it isn't in the local import | Open government data (GODL-India) |
+
+Responses are stored per startup as `enrichment_record` rows on submission.
+
 ## Why not more / why not the "real" sources
 
 - **Crunchbase**: bulk CSV export requires an Enterprise/Applications Access
