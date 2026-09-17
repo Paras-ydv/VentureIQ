@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { compactNum } from "../lib/format";
 import { HBarChart } from "../components/charts";
-import { Badge, Card, SectionHeader, SkeletonRows, Stat } from "../components/primitives";
+import { Badge, Card, SectionError, SectionHeader, SkeletonRows, Stat } from "../components/primitives";
 
 /** Model transparency page.
  *
@@ -23,8 +23,14 @@ export default function Model() {
 
   if (err)
     return (
-      <Card className="p-6">
-        <p className="text-[13px] text-ink-secondary">{err}</p>
+      <Card>
+        <SectionError
+          message={err}
+          onRetry={() => {
+            setErr(null);
+            api.modelMetrics().then(setM).catch((e) => setErr(String(e?.message ?? e)));
+          }}
+        />
       </Card>
     );
   if (!m) return <SkeletonRows n={3} height={110} />;
@@ -35,7 +41,7 @@ export default function Model() {
   return (
     <div className="space-y-5 animate-in">
       <div>
-        <h1 className="text-[27px] font-semibold tracking-tight leading-tight">
+        <h1 className="text-[28px] font-extrabold tracking-tight leading-tight">
           Model transparency
         </h1>
         <p className="text-[13.5px] text-ink-muted mt-1.5 max-w-2xl leading-relaxed">
@@ -76,24 +82,24 @@ export default function Model() {
           description="Three classifiers trained on the same fused feature set (structured metadata concatenated with a dense text embedding of the company description). The best AUROC wins."
         />
         <div className="overflow-x-auto">
-          <table className="w-full text-[12.5px] min-w-[560px]">
+          <table className="data-table min-w-[560px]">
             <thead>
-              <tr className="text-ink-faint text-[11px] uppercase tracking-wide">
-                <th className="text-left font-medium py-2">Model</th>
-                <th className="text-right font-medium py-2">AUROC</th>
-                <th className="text-right font-medium py-2">Bal. acc</th>
-                <th className="text-right font-medium py-2">Precision</th>
-                <th className="text-right font-medium py-2">Recall</th>
-                <th className="text-right font-medium py-2">F1</th>
+              <tr>
+                <th className="col-sticky text-left">Model</th>
+                <th className="text-right">AUROC</th>
+                <th className="text-right">Bal. acc</th>
+                <th className="text-right">Precision</th>
+                <th className="text-right">Recall</th>
+                <th className="text-right">F1</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
               {rows.map(([name, v]) => (
                 <tr
                   key={name}
-                  className={name === m.chosen_model ? "bg-[rgba(91,157,240,0.055)]" : ""}
+                  className={name === m.chosen_model ? "bg-row-selected" : ""}
                 >
-                  <td className="py-2.5">
+                  <td className="col-sticky whitespace-nowrap">
                     <span className="text-ink">{name.replace(/_/g, " ")}</span>
                     {name === m.chosen_model && (
                       <Badge tone="brand">
@@ -101,17 +107,17 @@ export default function Model() {
                       </Badge>
                     )}
                   </td>
-                  <td className="py-2.5 text-right tnum text-ink">{v.auroc.toFixed(4)}</td>
-                  <td className="py-2.5 text-right tnum text-ink-secondary">
+                  <td className="tnum text-right text-ink">{v.auroc.toFixed(4)}</td>
+                  <td className="tnum text-right text-ink-secondary">
                     {v.balanced_accuracy.toFixed(4)}
                   </td>
-                  <td className="py-2.5 text-right tnum text-ink-secondary">
+                  <td className="tnum text-right text-ink-secondary">
                     {v.precision.toFixed(3)}
                   </td>
-                  <td className="py-2.5 text-right tnum text-ink-secondary">
+                  <td className="tnum text-right text-ink-secondary">
                     {v.recall.toFixed(3)}
                   </td>
-                  <td className="py-2.5 text-right tnum text-ink-secondary">{v.f1.toFixed(3)}</td>
+                  <td className="tnum text-right text-ink-secondary">{v.f1.toFixed(3)}</td>
                 </tr>
               ))}
             </tbody>
@@ -124,19 +130,19 @@ export default function Model() {
           <SectionHeader eyebrow="Training data" title="What it learned from" />
           <dl className="space-y-3 text-[12.5px]">
             <div>
-              <dt className="text-ink-faint mb-0.5">Source</dt>
+              <dt className="text-ink-muted mb-0.5">Source</dt>
               <dd className="text-ink-secondary">{m.trained_on}</dd>
             </div>
             <div>
-              <dt className="text-ink-faint mb-0.5">Positive class</dt>
+              <dt className="text-ink-muted mb-0.5">Positive class</dt>
               <dd className="text-ink-secondary">{m.positive_class}</dd>
             </div>
             <div>
-              <dt className="text-ink-faint mb-0.5">Excluded</dt>
+              <dt className="text-ink-muted mb-0.5">Excluded</dt>
               <dd className="text-ink-secondary">{m.excluded}</dd>
             </div>
             <div>
-              <dt className="text-ink-faint mb-0.5">Held-out split</dt>
+              <dt className="text-ink-muted mb-0.5">Held-out split</dt>
               <dd className="text-ink-secondary tnum">{(m.test_size * 100).toFixed(0)}%</dd>
             </div>
           </dl>
@@ -148,7 +154,7 @@ export default function Model() {
                 { label: "Inactive (failed)", value: m.n_negative },
               ]}
               valueFormat={compactNum}
-              color="var(--color-series-3)"
+              color="var(--color-series-1)"
             />
           </div>
         </Card>
@@ -158,8 +164,8 @@ export default function Model() {
           <div
             className="rounded-lg border p-3.5 mb-3"
             style={{
-              borderColor: "rgba(250,178,25,0.3)",
-              backgroundColor: "rgba(250,178,25,0.06)",
+              borderColor: "var(--color-warning-line)",
+              backgroundColor: "var(--color-warning-tint)",
             }}
           >
             <p className="text-[12.5px] text-ink-secondary leading-relaxed">{m.caveat}</p>
@@ -172,7 +178,7 @@ export default function Model() {
               "Brand-new companies have no co-investment network position, so the network signal correctly returns zero rather than guessing.",
             ].map((t, i) => (
               <li key={i} className="flex gap-2 leading-relaxed">
-                <span className="text-ink-faint shrink-0">—</span>
+                <span className="text-ink-muted shrink-0">—</span>
                 {t}
               </li>
             ))}

@@ -33,10 +33,11 @@ function Toggle({
             key={v}
             type="button"
             onClick={() => onToggle(v)}
-            className={`rounded-lg border px-3 py-1.5 text-[12.5px] font-medium transition-colors ${
+            aria-pressed={on}
+            className={`cursor-pointer rounded-lg border px-3 py-1.5 text-[12.5px] font-medium transition-colors ${
               on
-                ? "border-[color:var(--color-brand)] bg-[rgba(91,157,240,0.13)] text-[color:var(--color-brand)]"
-                : "border-line bg-raised text-ink-muted hover:border-line-strong hover:text-ink-secondary"
+                ? "border-brand bg-brand-tint text-brand-text"
+                : "border-line bg-raised text-ink-secondary hover:border-line-strong hover:text-ink"
             }`}
           >
             {label(v)}
@@ -107,7 +108,7 @@ export default function Onboarding() {
   return (
     <div className="max-w-2xl mx-auto space-y-5 animate-in">
       <div>
-        <h1 className="text-[27px] font-semibold tracking-tight leading-tight">
+        <h1 className="text-[28px] font-extrabold tracking-tight leading-tight">
           Investor onboarding
         </h1>
         <p className="text-[13.5px] text-ink-muted mt-1.5 leading-relaxed">
@@ -163,7 +164,7 @@ export default function Onboarding() {
             <div className="sm:col-span-2">
               <label className="eyebrow block mb-1.5">
                 SEBI registration{" "}
-                <span className="normal-case text-ink-faint">
+                <span className="normal-case text-ink-muted">
                   (auto-marks you as an accredited investor)
                 </span>
               </label>
@@ -253,8 +254,10 @@ export default function Onboarding() {
         </Card>
 
         {error && (
-          <Card className="p-4 !border-[rgba(208,59,59,0.34)] !bg-[rgba(208,59,59,0.07)]">
-            <p className="text-[12.5px] text-[color:var(--color-critical)]">{error}</p>
+          <Card className="border-critical-line! bg-critical-tint! p-4">
+            <p className="text-[13px] text-critical-text">
+              <span className="font-medium">Couldn't create profile:</span> {error}
+            </p>
           </Card>
         )}
 

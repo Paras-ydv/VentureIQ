@@ -110,7 +110,7 @@ export default function Submit() {
   return (
     <div className="max-w-3xl mx-auto space-y-5 animate-in">
       <div>
-        <h1 className="text-[27px] font-semibold tracking-tight leading-tight">
+        <h1 className="text-[28px] font-extrabold tracking-tight leading-tight">
           Register a startup
         </h1>
         <p className="text-[13.5px] text-ink-muted mt-1.5 leading-relaxed">
@@ -226,7 +226,7 @@ export default function Submit() {
             </div>
             <div>
               <label className="eyebrow block mb-1.5">
-                CIN <span className="normal-case text-ink-faint">(verified via MCA21)</span>
+                CIN <span className="normal-case text-ink-muted">(verified via MCA21)</span>
               </label>
               <input
                 className="field"
@@ -388,20 +388,20 @@ export default function Submit() {
         </Card>
 
         {error && (
-          <Card className="p-4 !border-[rgba(208,59,59,0.34)] !bg-[rgba(208,59,59,0.07)]">
-            <p className="text-[12.5px] text-[color:var(--color-critical)]">
+          <Card className="border-critical-line! bg-critical-tint! p-4">
+            <p className="text-[13px] text-critical-text">
               <span className="font-medium">Validation failed:</span> {error}
             </p>
           </Card>
         )}
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <button type="submit" className="btn btn-primary" disabled={submitting}>
             {submitting ? "Scoring…" : "Submit & score"}
           </button>
-          <p className="text-[12px] text-ink-muted">
-            On submit, your profile is validated, scored across four dimensions, and indexed
-            for peer benchmarking.
+          <p className="max-w-md text-[12px] leading-relaxed text-ink-muted">
+            On submit, your profile is validated server-side, scored across four dimensions,
+            and indexed for peer benchmarking.
           </p>
         </div>
       </form>

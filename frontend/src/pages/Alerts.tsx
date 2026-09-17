@@ -1,20 +1,26 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, type Alert } from "../lib/api";
 import { relativeTime, SEVERITY_COLOR, titleCase } from "../lib/format";
-import { Badge, Card, Empty, SkeletonRows } from "../components/primitives";
+import { Badge, Card, Empty, SectionError, SkeletonRows } from "../components/primitives";
 
 export default function Alerts() {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [severity, setSeverity] = useState<string>("");
 
-  useEffect(() => {
+  const load = useCallback(() => {
+    setLoading(true);
+    setError(null);
     api
       .alerts(60)
       .then(setAlerts)
+      .catch((e) => setError(String(e?.message ?? e)))
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => load(), [load]);
 
   const shown = severity ? alerts.filter((a) => a.severity === severity) : alerts;
   const counts = {
@@ -25,7 +31,7 @@ export default function Alerts() {
   return (
     <div className="space-y-5 animate-in">
       <div>
-        <h1 className="text-[27px] font-semibold tracking-tight leading-tight">
+        <h1 className="text-[28px] font-extrabold tracking-tight leading-tight">
           Fraud &amp; risk alerts
         </h1>
         <p className="text-[13.5px] text-ink-muted mt-1.5 max-w-2xl leading-relaxed">
@@ -43,8 +49,9 @@ export default function Alerts() {
           <button
             key={f.v}
             onClick={() => setSeverity(f.v)}
+            aria-pressed={severity === f.v}
             className={`btn text-[12.5px] ${
-              severity === f.v ? "!bg-overlay !border-line-strong" : ""
+              severity === f.v ? "bg-brand-tint! border-brand! text-brand-text!" : ""
             }`}
           >
             {f.l}
@@ -52,11 +59,23 @@ export default function Alerts() {
         ))}
       </div>
 
-      {loading ? (
+      {error ? (
+        <Card>
+          <SectionError message={error} onRetry={load} />
+        </Card>
+      ) : loading ? (
         <SkeletonRows n={6} height={84} />
       ) : shown.length === 0 ? (
         <Card>
-          <Empty title="No alerts at this severity" />
+          <Empty
+            tone="good"
+            title={
+              severity
+                ? `No ${severity}-severity alerts`
+                : "No companies currently flagged for review"
+            }
+            hint="Every cross-source consistency check passed for the companies in view."
+          />
         </Card>
       ) : (
         <div className="space-y-2.5">
@@ -71,11 +90,11 @@ export default function Alerts() {
                   <div className="flex items-center gap-2 flex-wrap">
                     <Link
                       to={`/startup/${a.startup_id}`}
-                      className="text-[14px] font-medium text-ink hover:text-[color:var(--color-brand)] transition-colors"
+                      className="text-[14px] font-medium text-ink hover:text-brand-text transition-colors"
                     >
                       {a.startup_name}
                     </Link>
-                    <Badge tone={a.severity === "high" ? "critical" : "warning"}>
+                    <Badge tone={a.severity === "high" ? "critical" : a.severity === "medium" ? "serious" : "warning"}>
                       {a.severity}
                     </Badge>
                     <span className="chip">{a.sector}</span>
@@ -98,7 +117,7 @@ export default function Alerts() {
                   <div className="tnum text-[13px] text-ink-secondary">
                     {a.anomaly_score.toFixed(2)}
                   </div>
-                  <div className="text-[10.5px] text-ink-faint mt-0.5">
+                  <div className="text-[10.5px] text-ink-muted mt-0.5">
                     {relativeTime(a.run_at)}
                   </div>
                   <div className="mt-2">

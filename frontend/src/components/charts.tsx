@@ -2,9 +2,9 @@ import { useState, type ReactNode } from "react";
 
 /* Shared chart chrome. Grid and axes are deliberately recessive — they orient
    the eye without competing with the data. */
-const GRID = "rgba(255,255,255,0.05)";
-const AXIS = "rgba(255,255,255,0.11)";
-const MUTED = "#6e7683";
+const GRID = "var(--color-grid)";
+const AXIS = "var(--color-axis)";
+const MUTED = "var(--color-ink-muted)"; // bound to the token, never hardcoded
 
 function Tooltip({
   x,
@@ -17,7 +17,7 @@ function Tooltip({
 }) {
   return (
     <div
-      className="pointer-events-none absolute z-20 rounded-lg border border-line-strong bg-overlay px-2.5 py-1.5 text-[11.5px] shadow-lg whitespace-nowrap"
+      className="pointer-events-none absolute z-20 rounded-lg border border-line bg-overlay px-2.5 py-1.5 text-[12px] whitespace-nowrap shadow-[var(--shadow-pop)]"
       style={{
         left: x,
         top: y,
@@ -147,13 +147,13 @@ export function HBarChart({
       {rows.map((d) => (
         <div key={d.label} className="group">
           <div className="flex items-baseline justify-between gap-3 mb-1">
-            <span className="text-[12.5px] text-ink-secondary truncate">{d.label}</span>
-            <span className="tnum text-[12px] text-ink shrink-0">
+            <span className="text-[13px] font-medium text-ink-secondary truncate">{d.label}</span>
+            <span className="tnum text-[12.5px] text-ink shrink-0">
               {valueFormat(d.value)}
               {d.meta && <span className="text-ink-muted ml-2 font-sans">{d.meta}</span>}
             </span>
           </div>
-          <div className="h-1.5 w-full rounded-full bg-[rgba(255,255,255,0.055)] overflow-hidden">
+          <div className="h-1.5 w-full rounded-full bg-track overflow-hidden">
             <div
               className="h-full rounded-full"
               style={{
@@ -171,29 +171,60 @@ export function HBarChart({
 
 /* ------------------------------------------------------------------ line */
 
+/** Line/area chart.
+ *
+ *  A `null` value is a genuine data gap and the line BREAKS across it. Silently
+ *  interpolating over missing periods would assert continuity the data does not
+ *  support — a data-integrity failure on a product about trustworthy data
+ *  (dashboard.md §9).
+ */
 export function LineChart({
   data,
   height = 180,
   color = "var(--color-series-1)",
   valueFormat = (v: number) => String(v),
+  gapNote,
 }: {
-  data: { label: string | number; value: number }[];
+  data: { label: string | number; value: number | null }[];
   height?: number;
   color?: string;
   valueFormat?: (v: number) => string;
+  gapNote?: string;
 }) {
   const [hover, setHover] = useState<number | null>(null);
   if (data.length < 2) return null;
 
   const W = 100;
   const plotH = height - 24;
-  const max = Math.max(...data.map((d) => d.value)) || 1;
+  const values = data.map((d) => d.value).filter((v): v is number => v !== null);
+  const max = Math.max(...values) || 1;
   const min = 0;
   const px = (i: number) => (i / (data.length - 1)) * W;
   const py = (v: number) => plotH - ((v - min) / (max - min)) * plotH;
 
-  const line = data.map((d, i) => `${i === 0 ? "M" : "L"}${px(i)},${py(d.value)}`).join(" ");
-  const area = `${line} L${W},${plotH} L0,${plotH} Z`;
+  // Split into contiguous runs so a null produces a real break, not a bridge.
+  const segments: { i: number; value: number }[][] = [];
+  let run: { i: number; value: number }[] = [];
+  data.forEach((d, i) => {
+    if (d.value === null) {
+      if (run.length) segments.push(run);
+      run = [];
+    } else {
+      run.push({ i, value: d.value });
+    }
+  });
+  if (run.length) segments.push(run);
+
+  const line = segments
+    .map((seg) => seg.map((p, k) => `${k === 0 ? "M" : "L"}${px(p.i)},${py(p.value)}`).join(" "))
+    .join(" ");
+  const area = segments
+    .filter((seg) => seg.length > 1)
+    .map((seg) => {
+      const path = seg.map((p, k) => `${k === 0 ? "M" : "L"}${px(p.i)},${py(p.value)}`).join(" ");
+      return `${path} L${px(seg[seg.length - 1].i)},${plotH} L${px(seg[0].i)},${plotH} Z`;
+    })
+    .join(" ");
 
   return (
     <div className="relative w-full" style={{ height }}>
@@ -207,7 +238,7 @@ export function LineChart({
       >
         <defs>
           <linearGradient id="lineFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={color} stopOpacity="0.22" />
+            <stop offset="0%" stopColor={color} stopOpacity="0.16" />
             <stop offset="100%" stopColor={color} stopOpacity="0" />
           </linearGradient>
         </defs>
@@ -247,15 +278,6 @@ export function LineChart({
               strokeWidth="1"
               vectorEffect="non-scaling-stroke"
             />
-            <circle
-              cx={px(hover)}
-              cy={py(data[hover].value)}
-              r="4"
-              fill={color}
-              stroke="var(--color-surface)"
-              strokeWidth="2"
-              vectorEffect="non-scaling-stroke"
-            />
           </>
         )}
 
@@ -273,6 +295,31 @@ export function LineChart({
         ))}
       </svg>
 
+      {/* Point markers are HTML, not SVG: the plot stretches non-uniformly
+          (preserveAspectRatio="none"), which would turn circles into smears. */}
+      {segments
+        .filter((seg) => seg.length === 1)
+        .map((seg) => (
+          <span
+            key={`pt-${seg[0].i}`}
+            aria-hidden
+            className="pointer-events-none absolute h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full"
+            style={{ left: `${(px(seg[0].i) / W) * 100}%`, top: py(seg[0].value), backgroundColor: color }}
+          />
+        ))}
+      {hover !== null && data[hover].value !== null && (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-surface"
+          style={{
+            left: `${(px(hover) / W) * 100}%`,
+            top: py(data[hover].value as number),
+            backgroundColor: color,
+            boxShadow: "0 0 0 1px var(--color-line-strong)",
+          }}
+        />
+      )}
+
       <div className="absolute inset-x-0 flex justify-between px-0" style={{ top: plotH + 6 }}>
         {data.map((d, i) =>
           i % Math.ceil(data.length / 7) === 0 ? (
@@ -285,9 +332,18 @@ export function LineChart({
         )}
       </div>
 
+      {gapNote && (
+        <div className="absolute inset-x-0 -bottom-4 text-[10px] text-ink-muted">{gapNote}</div>
+      )}
+
       {hover !== null && (
-        <Tooltip x={`${(px(hover) / W) * 100}%`} y={py(data[hover].value)}>
-          <span className="text-ink font-medium">{valueFormat(data[hover].value)}</span>
+        <Tooltip
+          x={`${(px(hover) / W) * 100}%`}
+          y={data[hover].value === null ? plotH / 2 : py(data[hover].value as number)}
+        >
+          <span className="text-ink font-medium">
+            {data[hover].value === null ? "No data" : valueFormat(data[hover].value as number)}
+          </span>
           <span className="text-ink-muted ml-1.5">{data[hover].label}</span>
         </Tooltip>
       )}
@@ -326,8 +382,8 @@ export function AttributionBars({
                 {it.contribution.toFixed(1)}
               </span>
             </div>
-            <div className="relative h-1.5 w-full rounded-full bg-[rgba(255,255,255,0.05)]">
-              <div className="absolute left-1/2 top-0 bottom-0 w-px bg-[rgba(255,255,255,0.14)]" />
+            <div className="relative h-1.5 w-full rounded-full bg-track">
+              <div className="absolute left-1/2 top-0 bottom-0 w-px bg-axis" />
               <div
                 className="absolute top-0 h-full rounded-full"
                 style={{

@@ -63,8 +63,13 @@ export const SEVERITY_COLOR: Record<string, string> = {
   low: "var(--color-warning)",
 };
 
+/** The API stores naive UTC timestamps; read them as UTC, not local time. */
+export function apiDate(iso: string): Date {
+  return new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(iso) ? iso : `${iso}Z`);
+}
+
 export function relativeTime(iso: string): string {
-  const then = new Date(iso).getTime();
+  const then = apiDate(iso).getTime();
   const secs = Math.floor((Date.now() - then) / 1000);
   if (secs < 60) return "just now";
   if (secs < 3600) return `${Math.floor(secs / 60)}m ago`;
