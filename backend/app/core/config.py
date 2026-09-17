@@ -26,6 +26,13 @@ class Settings(BaseSettings):
     # (public API, no consent flow). The rest ship as mock adapters --- see
     # data/raw/README.md for why MCA21/GSTN/LinkedIn cannot be bulk-collected.
     github_token: str | None = None
+    # data.gov.in API key for the MCA company master data (free registration).
+    # Without one the public sample key is used: 10 records per call, enough
+    # for single-CIN lookups but not for the bulk registry import.
+    data_gov_in_key: str | None = None
+    # The MCA registry lives in its own file so scripts/bootstrap.py (which
+    # rebuilds the main database) never wipes a multi-lakh import.
+    registry_db_path: str = str(BACKEND_DIR / "registry.db")
     enrichment_cache_days: int = 30
     enrichment_max_retries: int = 5
 
@@ -42,13 +49,17 @@ class Settings(BaseSettings):
     # we mark the score low-confidence (docs/BUILD_PLAN.md Problem 4).
     min_cohort_size: int = 20
 
+    # Deployed frontends: set VIQ_CORS_ORIGINS='["https://your-app.vercel.app"]'.
+    # The regex additionally lets Vercel preview URLs through.
+    cors_origin_regex: str | None = r"https://.*\.vercel\.app"
     cors_origins: list[str] = [
         "http://localhost:5173",
         "http://127.0.0.1:5173",
         "http://localhost:4173",
     ]
 
-    model_config = {"env_prefix": "VIQ_", "env_file": ".env", "extra": "ignore"}
+    # backend/.env, wherever the server is started from. See .env.example.
+    model_config = {"env_prefix": "VIQ_", "env_file": BACKEND_DIR / ".env", "extra": "ignore"}
 
 
 settings = Settings()
