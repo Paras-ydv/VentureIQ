@@ -69,12 +69,33 @@ trained models live on disk.
 2. Add an environment variable `VITE_API_BASE` = `https://<your-api-host>/api`.
    It is read at build time, so redeploy after changing it.
 
-**API**
+**API (Render)**
 
-Run `uvicorn app.main:app --host 0.0.0.0 --port $PORT` from `backend/`, after
-`scripts/bootstrap.py` has built the database. Set `VIQ_CORS_ORIGINS` to your
-Vercel domain (`*.vercel.app` preview URLs are already allowed). Copy
-`backend/.env.example` for the optional keys.
+`render.yaml` in the repo root is a blueprint: Render → New → Blueprint → pick
+this repo, and it creates the service with the right build and start commands.
+Then set `VIQ_CORS_ORIGINS` to `["https://<your-app>.vercel.app"]` in the Render
+dashboard (preview URLs on `*.vercel.app` are already allowed), plus the
+optional keys from `backend/.env.example`.
+
+The build runs `scripts/bootstrap.py`, because the database and trained models
+are deliberately not in git. Two consequences on Render's free instance:
+
+- The disk is ephemeral. Anything written at runtime — new registrations,
+  behavioural events — is lost when the instance restarts or redeploys. Add a
+  persistent disk, or point `VIQ_DATABASE_URL` at Postgres (you will need to add
+  a driver such as `psycopg[binary]` to `requirements.txt`), to keep them.
+- Free instances sleep after 15 minutes idle, so the first request afterwards
+  waits ~1 minute for a cold start.
+
+The API needs roughly 400 MB of RAM once the models and the retrieval index are
+loaded, which is close to the 512 MB free limit. If it gets OOM-killed, either
+build with `python scripts/bootstrap.py --fast` (India-only corpus) or move to a
+paid instance.
+
+`backend/registry.db` (the MCA company registry) is not deployed: it is
+gitignored and too large. Without it, CIN lookups still work live against
+data.gov.in, but fuzzy name search over the registry is unavailable until you
+import it on a host with a persistent disk.
 
 Without a reachable API the deployed site still renders, but every panel shows
 its "couldn't load" state — nothing is hard-coded.
