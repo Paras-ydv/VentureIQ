@@ -158,6 +158,52 @@ def city_breakdown(limit: int = 10, db: Session = Depends(get_db)):
     return [{"city": r[0], "count": r[1]} for r in rows]
 
 
+@router.get("/stats/constellation")
+def constellation(limit: int = Query(1800, ge=100, le=10000), db: Session = Depends(get_db)):
+    """Compact per-company points for the landing page's 3D constellation.
+
+    Every point is a real scored startup. Column arrays keep the payload small
+    enough to plot thousands of companies without paging the full list API.
+    Sectors outside the main taxonomy (fewer than 20 companies) fold into
+    "Other" so the scene has a legible number of arms.
+    """
+    rows = (
+        db.query(
+            Startup.startup_id,
+            Startup.legal_name,
+            Startup.sector,
+            Startup.verified,
+            Score.composite_score,
+            Score.fraud_likelihood_score,
+        )
+        .join(Score, Score.startup_id == Startup.startup_id)
+        .order_by(Score.composite_score.desc())
+        .all()
+    )
+    # Even stride across the whole score distribution, so the scene shows the
+    # real spread of the corpus rather than only its best companies.
+    step = max(1, len(rows) // limit)
+    rows = rows[::step][:limit]
+    counts: dict[str, int] = {}
+    for r in rows:
+        counts[r.sector] = counts.get(r.sector, 0) + 1
+    main = sorted((s for s, n in counts.items() if n >= 20), key=lambda s: -counts[s])
+    sectors = main + (["Other"] if any(counts[s] < 20 for s in counts) else [])
+    index = {s: i for i, s in enumerate(sectors)}
+    other = index.get("Other", 0)
+
+    return {
+        "sectors": sectors,
+        "count": len(rows),
+        "id": [r.startup_id for r in rows],
+        "name": [r.legal_name for r in rows],
+        "sector": [index.get(r.sector, other) for r in rows],
+        "score": [round(r.composite_score, 1) for r in rows],
+        "fraud": [round(r.fraud_likelihood_score, 1) for r in rows],
+        "verified": [bool(r.verified) for r in rows],
+    }
+
+
 @router.get("/model/metrics")
 def model_metrics():
     """Expose the trained model's real held-out metrics.
