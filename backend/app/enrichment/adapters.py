@@ -11,7 +11,7 @@ Which sources are real, and why:
   mca21    MOCK   per-company and fee-gated; no bulk access exists
   gstn     MOCK   requires the taxpayer's per-pull consent (account aggregator)
   linkedin MOCK   scraping breaks ToS; needs OAuth consent or a licensed partner
-  whois    MOCK   real WHOIS is trivial to add but mostly redacted post-GDPR
+  whois    REAL   RDAP (WHOIS's successor): registration date and registrar only
 
 See data/raw/README.md for the full constraint write-up. The mock adapters
 return deterministically-seeded, realistically-shaped data and always set
@@ -224,26 +224,50 @@ class LinkedInAdapter(SourceAdapter):
 
 
 class WhoisAdapter(SourceAdapter):
-    """Domain age --- a cheap corroboration of how long a company has existed."""
+    """Domain age --- a cheap corroboration of how long a company has existed.
+
+    Uses RDAP, the structured successor to WHOIS. Personal registrant data is
+    redacted post-GDPR, but the registration date and registrar are public,
+    and those are all this check needs.
+    """
 
     name = "whois"
+    is_mock = False
 
     def applicable(self, startup: Any) -> bool:
         return bool(startup.website)
 
     async def fetch(self, startup: Any, **kwargs: Any) -> dict[str, Any]:
-        rng = _seed_for("whois", startup.website or startup.legal_name)
-        founded_year = startup.founded_date.year if startup.founded_date else 2021
-        # A domain registered well after the claimed founding date is a mismatch
-        # worth surfacing.
-        domain_year = founded_year + rng.choice([0, 0, 0, -1, 1, 3])
+        from app.onboarding.checks import registrable_domain
+        from app.onboarding.fetch import api_get
+
+        domain = registrable_domain(startup.website)
+        res = await api_get(f"https://rdap.org/domain/{domain}")
+        res.raise_for_status()
+        body = res.json()
+        registered = next(
+            (e.get("eventDate") for e in body.get("events", [])
+             if e.get("eventAction") == "registration"),
+            None,
+        )
+        registrar = None
+        for ent in body.get("entities", []):
+            if "registrar" in (ent.get("roles") or []):
+                for item in (ent.get("vcardArray") or [None, []])[1]:
+                    if item and item[0] == "fn":
+                        registrar = item[3]
+        created_year = int(registered[:4]) if registered else None
+        founded_year = startup.founded_date.year if startup.founded_date else None
         return {
-            "_mock": True,
-            "_why_mock": "Real WHOIS is largely redacted post-GDPR; trivial to wire up if needed",
-            "domain": startup.website,
-            "created_year": domain_year,
-            "registrar": rng.choice(["GoDaddy", "Namecheap", "BigRock", "Cloudflare"]),
-            "consistent_with_founding_date": abs(domain_year - founded_year) <= 1,
+            "domain": domain,
+            "registered": registered,
+            "created_year": created_year,
+            "registrar": registrar,
+            # A domain registered well after the claimed founding date is a
+            # mismatch worth surfacing; an older one (bought early) is not.
+            "consistent_with_founding_date": (
+                None if not (created_year and founded_year) else created_year <= founded_year + 2
+            ),
         }
 
 

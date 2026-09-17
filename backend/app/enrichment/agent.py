@@ -117,14 +117,18 @@ def _apply_to_founders(db: Session, startup: Startup, source: str, payload: dict
 
 
 def _apply_to_startup(db: Session, startup: Startup, source: str, payload: dict) -> None:
+    mocked = bool(payload.get("_mock"))
     if source == "mca21":
         if payload.get("registration_verified"):
-            startup.cin = payload.get("cin") or startup.cin
+            # A mocked registry invents identifiers; never write those onto a profile.
+            if not mocked:
+                startup.cin = payload.get("cin") or startup.cin
             startup.verified = True
         else:
             startup.verified = False
     elif source == "gstn":
-        startup.gstin = payload.get("gstin") or startup.gstin
+        if not mocked:
+            startup.gstin = payload.get("gstin") or startup.gstin
         fin = startup.latest_financials
         if fin and payload.get("gst_reported_annual_revenue") is not None:
             fin.gst_reported_revenue = payload["gst_reported_annual_revenue"]
