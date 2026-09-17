@@ -353,6 +353,28 @@ class Listing(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
 
 
+class OnboardingSession(Base):
+    """One agentic registration attempt, before it becomes a Startup.
+
+    Holds what the founder typed, everything the agent found (with per-source
+    provenance), the live event log, and the founder's edits. Kept after
+    submission so the reconciliation that produced a profile stays auditable.
+    """
+
+    __tablename__ = "onboarding_session"
+
+    session_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    status: Mapped[str] = mapped_column(String(16), default="running")  # running|ready|submitted
+    inputs: Mapped[dict] = mapped_column(JSON)
+    evidence: Mapped[dict | None] = mapped_column(JSON)  # field -> [evidence]
+    overrides: Mapped[dict | None] = mapped_column(JSON)  # founder edits and resolutions
+    tool_results: Mapped[dict | None] = mapped_column(JSON)  # tool -> raw payload
+    events: Mapped[list | None] = mapped_column(JSON)
+    startup_id: Mapped[str | None] = mapped_column(String(36))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_now, onupdate=_now)
+
+
 class AuditLog(Base):
     __tablename__ = "audit_log"
 
