@@ -19,7 +19,9 @@ prints both, which is how you check a provider still matches.
 
 from __future__ import annotations
 
+import json
 import re
+import sqlite3
 from datetime import UTC, datetime
 from typing import Any
 
@@ -53,10 +55,109 @@ def handle_from(url_or_handle: str | None) -> str | None:
     return s.lstrip("@") or None
 
 
-async def fetch_profile(handle: str) -> dict[str, Any]:
-    """Raw provider payload for one profile. Raises httpx.HTTPError."""
+class QuotaExceeded(RuntimeError):
+    """The monthly RapidAPI budget is spent; refuse rather than overspend."""
+
+
+# --------------------------------------------------------------------------
+# cache — the provider's free tier is 50 calls a month, so every response is
+# kept and reused. Cached profiles cost nothing and work offline.
+# --------------------------------------------------------------------------
+
+_CACHE_SCHEMA = """
+CREATE TABLE IF NOT EXISTS linkedin_profile (
+    handle TEXT PRIMARY KEY,
+    fetched_at TEXT NOT NULL,
+    raw TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS api_usage (
+    provider TEXT NOT NULL,
+    month TEXT NOT NULL,
+    calls INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (provider, month)
+);
+"""
+
+
+def _cache() -> sqlite3.Connection:
+    conn = sqlite3.connect(settings.cache_db_path, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    conn.executescript(_CACHE_SCHEMA)
+    return conn
+
+
+def _this_month() -> str:
+    return datetime.now(UTC).strftime("%Y-%m")
+
+
+def usage(provider: str = "rapidapi") -> dict[str, Any]:
+    conn = _cache()
+    try:
+        row = conn.execute("SELECT calls FROM api_usage WHERE provider = ? AND month = ?",
+                           (provider, _this_month())).fetchone()
+        cached = conn.execute("SELECT COUNT(*) FROM linkedin_profile").fetchone()[0]
+    finally:
+        conn.close()
+    used = row["calls"] if row else 0
+    return {"month": _this_month(), "calls_used": used,
+            "budget": settings.rapidapi_monthly_budget,
+            "remaining": max(0, settings.rapidapi_monthly_budget - used),
+            "profiles_cached": cached}
+
+
+def cached_profile(handle: str, max_age_days: int | None = None) -> dict[str, Any] | None:
+    max_age = settings.linkedin_cache_days if max_age_days is None else max_age_days
+    conn = _cache()
+    try:
+        row = conn.execute("SELECT fetched_at, raw FROM linkedin_profile WHERE handle = ?",
+                           (handle,)).fetchone()
+    finally:
+        conn.close()
+    if not row:
+        return None
+    age = datetime.now(UTC) - datetime.fromisoformat(row["fetched_at"])
+    if age.days > max_age:
+        return None
+    return json.loads(row["raw"])
+
+
+def _store(handle: str, raw: dict[str, Any]) -> None:
+    conn = _cache()
+    try:
+        conn.execute("INSERT OR REPLACE INTO linkedin_profile (handle, fetched_at, raw) VALUES (?, ?, ?)",
+                     (handle, datetime.now(UTC).isoformat(timespec="seconds"), json.dumps(raw)))
+        conn.execute("""INSERT INTO api_usage (provider, month, calls) VALUES ('rapidapi', ?, 1)
+                        ON CONFLICT(provider, month) DO UPDATE SET calls = calls + 1""", (_this_month(),))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+async def fetch_profile(handle: str, *, refresh: bool = False) -> dict[str, Any]:
+    """Cached provider payload for one profile. Raises httpx.HTTPError.
+
+    Set `refresh` to bypass the cache; that spends one call from the monthly
+    quota. `last_source` on the returned dict says where it came from.
+    """
+    if not refresh:
+        hit = cached_profile(handle)
+        if hit is not None:
+            if hit.get("_not_found"):
+                raise httpx.HTTPStatusError(
+                    "cached 404",
+                    request=httpx.Request("GET", "https://cached"),
+                    response=httpx.Response(404),
+                )
+            hit["_cache"] = "hit"
+            return hit
     if not enabled():
         raise RuntimeError("VIQ_RAPIDAPI_KEY is not set")
+    left = usage()["remaining"]
+    if left <= 0:
+        raise QuotaExceeded(
+            f"monthly budget of {settings.rapidapi_monthly_budget} RapidAPI calls is spent; "
+            "cached profiles still work"
+        )
     host = settings.linkedin_api_host
     async with httpx.AsyncClient(timeout=25) as client:
         res = await client.get(
@@ -64,8 +165,16 @@ async def fetch_profile(handle: str) -> dict[str, Any]:
             params={settings.linkedin_api_param: handle},
             headers={"x-rapidapi-key": settings.rapidapi_key, "x-rapidapi-host": host},
         )
+    if res.status_code == 404:
+        # Cache the miss too: a handle that does not exist must not be paid for
+        # again on every retry.
+        _store(handle, {"_not_found": True, "status": 404})
+        res.raise_for_status()
     res.raise_for_status()
-    return res.json()
+    raw = res.json()
+    _store(handle, raw)
+    raw["_cache"] = "miss"
+    return raw
 
 
 # --------------------------------------------------------------------------
@@ -115,8 +224,91 @@ def _int(v: Any) -> int | None:
     return int(m.group(0).replace(",", "")) if m else None
 
 
+def _year(v: Any) -> int | None:
+    """{'year': 2000} or '2000' or 'Jan 2000' → 2000."""
+    if isinstance(v, dict):
+        v = v.get("year")
+    ys = _years(v)
+    return ys[0] if ys else None
+
+
+def _parse_linkedinfetch(raw: dict[str, Any]) -> dict[str, Any] | None:
+    """linkedin-scraper27's shape: data.basic_info / experience / education."""
+    d = raw.get("data") if isinstance(raw.get("data"), dict) else None
+    bi = d.get("basic_info") if d and isinstance(d.get("basic_info"), dict) else None
+    if not bi:
+        return None
+
+    positions = []
+    for e in d.get("experience") or []:
+        if not isinstance(e, dict):
+            continue
+        start, end = _year(e.get("start_date")), _year(e.get("end_date"))
+        current = bool(e.get("is_current"))
+        if not start and e.get("duration"):
+            ys = _years(e["duration"])
+            start, end = (ys[0] if ys else None), (None if current else (ys[-1] if len(ys) > 1 else None))
+        positions.append({
+            "company": (e.get("company") or None),
+            "title": (e.get("title") or None),
+            "start_year": start,
+            "end_year": None if current else end,
+            "current": current,
+            "duration": e.get("duration") or None,
+            "description": (e.get("description") or None),
+        })
+
+    schools = [
+        {"school": e.get("school"), "degree": e.get("degree") or e.get("field_of_study") or None,
+         "years": e.get("duration") or None}
+        for e in (d.get("education") or []) if isinstance(e, dict) and e.get("school")
+    ]
+
+    loc = bi.get("location") if isinstance(bi.get("location"), dict) else {}
+    name = bi.get("fullname") or " ".join(
+        x for x in (bi.get("first_name"), bi.get("last_name")) if x) or None
+    starts = [p["start_year"] for p in positions if p["start_year"]]
+    career_start = min(starts) if starts else None
+    current_company = next((p["company"] for p in positions if p["current"]), None)
+    founder_elsewhere = [
+        p for p in positions
+        if p["title"] and _FOUNDER_TITLE.search(p["title"])
+        and (not current_company or p["company"] != current_company)
+    ]
+    about = str(bi.get("about") or "")
+    exits = [p for p in positions if p["description"] and _EXIT_HINT.search(p["description"])]
+
+    return {
+        "_provenance": PROVENANCE,
+        "name": name,
+        "headline": bi.get("headline") or None,
+        "about": about[:600] or None,
+        "location": loc.get("full") or loc.get("city") or None,
+        "profile_url": bi.get("profile_url") or None,
+        "handle": bi.get("public_identifier") or None,
+        "current_company": current_company,
+        "current_title": next((p["title"] for p in positions if p["current"]), None),
+        "connections": _int(bi.get("connection_count")),
+        "followers": _int(bi.get("follower_count")),
+        "is_influencer": bool(bi.get("is_influencer")),
+        "open_to_work": bool(bi.get("open_to_work")),
+        "positions": positions[:12],
+        "education": schools[:5],
+        "career_start_year": career_start,
+        "domain_experience_years": round(datetime.now(UTC).year - career_start, 1) if career_start else None,
+        "prior_founder_roles": len(founder_elsewhere),
+        "self_reported_exits": (len(exits) or None) if exits else (
+            1 if _EXIT_HINT.search(about) else None),
+        "profile_complete": bool(name and positions),
+    }
+
+
 def parse_profile(raw: dict[str, Any]) -> dict[str, Any]:
     """Provider payload → the founder-credibility fields the scorer reads."""
+    shaped = _parse_linkedinfetch(raw)
+    if shaped:
+        return shaped
+    # Fallback: an unknown provider shape, read as defensively as possible.
     name = _first(raw, "full_name", "fullName", "name", "profile_name") or None
     first, last = _first(raw, "first_name", "firstName"), _first(raw, "last_name", "lastName")
     if not name and (first or last):

@@ -677,6 +677,8 @@ async def linkedin_user(url_or_handle: str, founder_name: str, company: str | No
         hint = {401: "key rejected", 403: "not subscribed to this API", 404: "no such profile",
                 429: "rate limit reached"}.get(code, f"HTTP {code}")
         return {"status": "conflict" if code == 404 else "claimed", "note": f"LinkedIn lookup failed — {hint}"}
+    except li.QuotaExceeded as exc:
+        return {"status": "claimed", "note": f"LinkedIn lookup skipped — {exc}"}
     except (httpx.HTTPError, ValueError) as exc:
         return {"status": "claimed", "note": f"LinkedIn unreachable: {type(exc).__name__}"}
 

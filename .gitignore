@@ -6,6 +6,7 @@ __pycache__/
 # Local database & trained model artifacts (regenerate with scripts/bootstrap.py)
 backend/ventureiq.db
 backend/registry.db*
+backend/cache.db*
 backend/artifacts/*.joblib
 backend/artifacts/*.json
 

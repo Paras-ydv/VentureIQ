@@ -30,6 +30,7 @@ async def main() -> int:
     ap.add_argument("--company", default=None, help="company to match against")
     ap.add_argument("--name", default=None, help="founder name to match against")
     ap.add_argument("--raw", action="store_true", help="print the whole raw payload")
+    ap.add_argument("--refresh", action="store_true", help="bypass the cache (spends one API call)")
     args = ap.parse_args()
 
     handle = li.handle_from(args.profile)
@@ -42,8 +43,9 @@ async def main() -> int:
         print("VIQ_RAPIDAPI_KEY is not set — add it to backend/.env first.")
         return 1
 
+    print(f"quota   : {li.usage()}")
     try:
-        raw = await li.fetch_profile(handle)
+        raw = await li.fetch_profile(handle, refresh=args.refresh)
     except httpx.HTTPStatusError as exc:
         body = exc.response.text[:300]
         print(f"HTTP {exc.response.status_code}: {body}")
@@ -51,7 +53,8 @@ async def main() -> int:
             print("→ subscribe to the API on RapidAPI (free tier is enough to test).")
         return 1
 
-    print(f"\ntop-level keys: {list(raw)[:12]}")
+    print(f"cache   : {'served from cache' if raw.get('_cache') == 'hit' else 'fetched live (1 call spent)'}")
+    print(f"\ntop-level keys: {[k for k in raw if k != '_cache'][:12]}")
     profile = li.parse_profile(raw)
     parsed = {k: v for k, v in profile.items() if k not in ("positions", "education")}
     print("\nparsed:")

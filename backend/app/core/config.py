@@ -34,8 +34,12 @@ class Settings(BaseSettings):
     # adapter stays mocked; see app/enrichment/linkedin.py for provenance.
     rapidapi_key: str | None = None
     linkedin_api_host: str = "linkedin-scraper27.p.rapidapi.com"
-    linkedin_api_path: str = "/profile_details"
+    linkedin_api_path: str = "/profile/detail"
     linkedin_api_param: str = "username"
+    # Paid quota: cache profiles hard, and stop before the monthly cap.
+    cache_db_path: str = str(BACKEND_DIR / "cache.db")
+    linkedin_cache_days: int = 90
+    rapidapi_monthly_budget: int = 45
     # The MCA registry lives in its own file so scripts/bootstrap.py (which
     # rebuilds the main database) never wipes a multi-lakh import.
     registry_db_path: str = str(BACKEND_DIR / "registry.db")

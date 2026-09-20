@@ -197,7 +197,9 @@ class LinkedInAdapter(SourceAdapter):
     async def fetch(self, startup: Any, **kwargs: Any) -> dict[str, Any]:
         from app.enrichment import linkedin as li
 
-        if li.enabled():
+        # Seeded demo companies carry placeholder profile links, so the paid
+        # provider is used only for real registrations.
+        if li.enabled() and getattr(startup, "source", None) == "registration":
             fetched: dict[str, Any] = {}
             for founder in startup.founders:
                 handle = li.handle_from(founder.linkedin_url)
@@ -209,7 +211,10 @@ class LinkedInAdapter(SourceAdapter):
                     profile["match"] = li.matches(profile, founder.name, startup.legal_name)
                     profile["handle"] = handle
                     fetched[founder.name] = profile
-                except httpx.HTTPError as exc:
+                except httpx.HTTPStatusError as exc:
+                    fetched[founder.name] = {"handle": handle,
+                                             "error": f"HTTP {exc.response.status_code}"}
+                except (httpx.HTTPError, li.QuotaExceeded) as exc:
                     fetched[founder.name] = {"handle": handle, "error": str(exc)}
             if fetched:
                 return {"_provenance": li.PROVENANCE, "source": "rapidapi", "founders": fetched}
