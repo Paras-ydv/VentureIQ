@@ -1,6 +1,7 @@
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { m } from "motion/react";
+import { useAuth } from "../lib/auth";
 import { useInvestor } from "../lib/investor-context";
 import { ThemeToggle } from "./ui/ThemeToggle";
 
@@ -24,6 +25,7 @@ const Icon = {
     </>
   ),
   model: <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />,
+  bookmark: <path d="M6 4h12v16l-6-4-6 4V4z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />,
   plus: <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />,
   user: (
     <>
@@ -43,6 +45,7 @@ const NAV: NavEntry[] = [
   { to: "/dashboard", label: "Home", icon: svg(Icon.home), end: true },
   { to: "/discover", label: "Discover", icon: svg(Icon.search) },
   { to: "/feed", label: "My feed", icon: svg(Icon.feed) },
+  { to: "/saved", label: "Saved", icon: svg(Icon.bookmark) },
   { to: "/alerts", label: "Alerts", icon: svg(Icon.alert) },
   { to: "/model", label: "Model", icon: svg(Icon.model) },
 ];
@@ -191,52 +194,97 @@ function GlobalSearch() {
   );
 }
 
-function InvestorMenu() {
-  const { investors, current, setCurrentId } = useInvestor();
+function AccountMenu() {
+  const { user, signOut } = useAuth();
+  const { current } = useInvestor();
   const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
 
-  if (!investors.length) {
+  if (!user) {
     return (
-      <button className="btn btn-primary text-[13px]" onClick={() => navigate("/onboarding")}>
-        Create profile
-      </button>
+      <div className="flex items-center gap-2">
+        <Link to="/login" className="hidden text-[13.5px] font-semibold text-ink-secondary hover:text-ink sm:block">
+          Sign in
+        </Link>
+        <Link to="/login?mode=signup" className="btn btn-primary text-[13px]">
+          Create account
+        </Link>
+      </div>
     );
   }
 
-  const initials = (current?.name ?? "?")
-    .split(" ")
-    .map((p) => p[0])
-    .slice(0, 2)
-    .join("");
+  const initials = user.name.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase();
 
   return (
-    <div className="flex items-center gap-3">
-      {/* The select already names the investor; this line adds the firm. */}
-      <div className="hidden text-[12.5px] font-medium capitalize text-ink-muted xl:block">
-        {current?.firm_name ?? current?.investor_type.replace("_", " ")}
-      </div>
-      <label className="relative flex items-center">
-        <span className="sr-only">Switch investor profile</span>
-        <span className="pointer-events-none absolute left-1 grid h-8 w-8 place-items-center rounded-full bg-navy text-[12px] font-bold text-white">
+    <div className="relative">
+      <button
+        className="flex items-center gap-2 rounded-full border border-line-strong bg-surface py-1 pl-1 pr-2.5 transition-colors hover:border-ink-disabled"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <span className="grid h-8 w-8 place-items-center rounded-full bg-panel text-[12px] font-bold text-panel-ink">
           {initials}
         </span>
-        <select
-          aria-label="Switch investor profile"
-          className="field h-10 w-[46px] cursor-pointer appearance-none rounded-full border-transparent bg-transparent pl-10 pr-0 text-transparent sm:w-auto sm:max-w-[190px] sm:border-line-strong sm:bg-surface sm:pr-8 sm:text-ink"
-          value={current?.investor_id ?? ""}
-          onChange={(e) => setCurrentId(e.target.value)}
-        >
-          {investors.map((i) => (
-            <option key={i.investor_id} value={i.investor_id} className="text-ink">
-              {i.name}
-            </option>
-          ))}
-        </select>
-        <svg className="pointer-events-none absolute right-3 hidden text-ink-muted sm:block" width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden>
-          <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+        <span className="hidden max-w-[130px] truncate text-[13px] font-semibold sm:block">{user.name}</span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden className="text-ink-muted">
+          <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
         </svg>
-      </label>
+      </button>
+      {open && (
+        <>
+          <button className="fixed inset-0 z-40 cursor-default" aria-label="Close menu" onClick={() => setOpen(false)} />
+          <div role="menu" className="overlay-panel absolute right-0 z-50 mt-2 w-[248px] rounded-xl p-1.5">
+            <div className="border-b border-line px-3 py-2.5">
+              <div className="truncate text-[13.5px] font-bold">{user.name}</div>
+              <div className="truncate text-[12px] text-ink-muted">{user.email}</div>
+              <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                <span className="chip capitalize">{user.role}</span>
+                {current?.firm_name && <span className="chip">{current.firm_name}</span>}
+                {user.role === "investor" && !user.has_mandate && <span className="chip chip-brand">Set your mandate</span>}
+              </div>
+            </div>
+            {user.role === "investor" && (
+              <>
+                <MenuLink to="/saved" onClick={() => setOpen(false)}>
+                  Saved companies <span className="tnum ml-auto text-ink-muted">{user.watchlist_count}</span>
+                </MenuLink>
+                <MenuLink to="/onboarding" onClick={() => setOpen(false)}>
+                  {user.has_mandate ? "Edit mandate" : "Set your mandate"}
+                </MenuLink>
+              </>
+            )}
+            {user.role === "founder" && (
+              <MenuLink to="/register" onClick={() => setOpen(false)}>Register a startup</MenuLink>
+            )}
+            <button
+              role="menuitem"
+              className="flex w-full items-center rounded-lg px-3 py-2 text-left text-[13.5px] font-medium text-ink-secondary transition-colors hover:bg-raised hover:text-ink"
+              onClick={() => {
+                signOut();
+                setOpen(false);
+                navigate("/");
+              }}
+            >
+              Sign out
+            </button>
+          </div>
+        </>
+      )}
     </div>
+  );
+}
+
+function MenuLink({ to, children, onClick }: { to: string; children: ReactNode; onClick: () => void }) {
+  return (
+    <Link
+      role="menuitem"
+      to={to}
+      onClick={onClick}
+      className="flex items-center rounded-lg px-3 py-2 text-[13.5px] font-medium text-ink-secondary transition-colors hover:bg-raised hover:text-ink"
+    >
+      {children}
+    </Link>
   );
 }
 
@@ -300,7 +348,7 @@ export function Shell({ children }: { children: ReactNode }) {
             <GlobalSearch />
             <div className="ml-auto flex shrink-0 items-center gap-2">
               <ThemeToggle />
-              <InvestorMenu />
+              <AccountMenu />
             </div>
           </div>
         </header>

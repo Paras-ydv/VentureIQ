@@ -10,7 +10,7 @@ anyio==4.15.1
     #   starlette
     #   watchfiles
 bcrypt==5.0.0
-    # via passlib
+    # via ventureiq-backend (pyproject.toml)
 certifi==2026.7.22
     # via
     #   httpcore
@@ -54,8 +54,6 @@ numpy==2.5.3
     #   scikit-learn
     #   scipy
 pandas==3.0.5
-    # via ventureiq-backend (pyproject.toml)
-passlib==1.7.4
     # via ventureiq-backend (pyproject.toml)
 pyasn1==0.6.4
     # via

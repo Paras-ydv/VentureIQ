@@ -10,6 +10,7 @@ import { lazy, Suspense, useEffect } from "react";
 import { LazyMotion, m } from "motion/react";
 import { Shell } from "./components/Shell";
 import { ToastProvider } from "./components/ui/Toast";
+import { AuthProvider, useAuth } from "./lib/auth";
 import { InvestorProvider } from "./lib/investor-context";
 import { ThemeProvider } from "./lib/theme";
 
@@ -28,6 +29,8 @@ const Alerts = lazy(() => import("./pages/Alerts"));
 const Model = lazy(() => import("./pages/Model"));
 const Submit = lazy(() => import("./pages/Submit"));
 const Register = lazy(() => import("./pages/Register"));
+const Login = lazy(() => import("./pages/Login"));
+const Saved = lazy(() => import("./pages/Saved"));
 const Onboarding = lazy(() => import("./pages/Onboarding"));
 
 function PageFallback() {
@@ -42,6 +45,15 @@ function PageFallback() {
 
 /** Each route fades up on entry. Enter-only: an exit animation would hold the
  *  next page back, which reads as slowness in a data tool. */
+/** Investor-only areas. Public browsing stays open to everyone. */
+function RequireAuth({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+  const location = useLocation();
+  if (loading) return <div className="skeleton h-[60vh]" />;
+  if (!user) return <Navigate to={`/login?next=${encodeURIComponent(location.pathname)}`} replace />;
+  return <>{children}</>;
+}
+
 function RouteFade() {
   const { pathname } = useLocation();
   return (
@@ -81,7 +93,8 @@ export default function App() {
       <ThemeProvider>
         <LazyMotion features={motionFeatures}>
           <ToastProvider>
-            <InvestorProvider>
+            <AuthProvider>
+              <InvestorProvider>
               <ScrollToTop />
               <Routes>
                 <Route
@@ -95,19 +108,22 @@ export default function App() {
                   }
                 />
                 <Route element={<AppLayout />}>
-                  <Route path="/dashboard" element={<Overview />} />
+                  <Route path="/dashboard" element={<RequireAuth><Overview /></RequireAuth>} />
                   <Route path="/discover" element={<Discover />} />
                   <Route path="/startup/:id" element={<StartupDetail />} />
-                  <Route path="/feed" element={<Feed />} />
-                  <Route path="/alerts" element={<Alerts />} />
+                  <Route path="/feed" element={<RequireAuth><Feed /></RequireAuth>} />
+                  <Route path="/alerts" element={<RequireAuth><Alerts /></RequireAuth>} />
                   <Route path="/model" element={<Model />} />
                   <Route path="/register" element={<Register />} />
+                  <Route path="/saved" element={<RequireAuth><Saved /></RequireAuth>} />
                   <Route path="/submit" element={<Submit />} />
-                  <Route path="/onboarding" element={<Onboarding />} />
+                  <Route path="/onboarding" element={<RequireAuth><Onboarding /></RequireAuth>} />
                 </Route>
+                <Route path="/login" element={<Login />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
-            </InvestorProvider>
+              </InvestorProvider>
+            </AuthProvider>
           </ToastProvider>
         </LazyMotion>
       </ThemeProvider>

@@ -13,6 +13,8 @@ from app.models.entities import (
     Startup,
     StartupDocument,
     StartupFinancials,
+    User,
+    WatchlistItem,
 )
 
 __all__ = [
@@ -30,4 +32,6 @@ __all__ = [
     "Startup",
     "StartupDocument",
     "StartupFinancials",
+    "User",
+    "WatchlistItem",
 ]

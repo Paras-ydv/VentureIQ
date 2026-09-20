@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy import (
     JSON,
+    UniqueConstraint,
     Boolean,
     Date,
     DateTime,
@@ -353,6 +354,47 @@ class Listing(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
 
 
+class User(Base):
+    """A login. Investors own an `investor` row; founders own the startups they
+    register. Role is authoritative here, never on the token alone."""
+
+    __tablename__ = "app_user"
+
+    user_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    password_hash: Mapped[str | None] = mapped_column(String(255))
+    name: Mapped[str] = mapped_column(String(160))
+    role: Mapped[str] = mapped_column(String(16), default="investor")  # investor|founder
+    auth_provider: Mapped[str] = mapped_column(String(24), default="password")
+    provider_subject: Mapped[str | None] = mapped_column(String(255), index=True)
+    investor_id: Mapped[str | None] = mapped_column(ForeignKey("investor.investor_id"), index=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+    investor: Mapped[Investor | None] = relationship()
+    watchlist: Mapped[list[WatchlistItem]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+
+
+class WatchlistItem(Base):
+    """A company a user is tracking, with an optional private note."""
+
+    __tablename__ = "watchlist_item"
+    __table_args__ = (UniqueConstraint("user_id", "startup_id", name="uq_watchlist_user_startup"),)
+
+    item_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(ForeignKey("app_user.user_id"), index=True)
+    startup_id: Mapped[str] = mapped_column(ForeignKey("startup.startup_id"), index=True)
+    note: Mapped[str | None] = mapped_column(Text)
+    stage: Mapped[str] = mapped_column(String(24), default="watching")  # watching|contacted|passed
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+
+    user: Mapped[User] = relationship(back_populates="watchlist")
+    startup: Mapped[Startup] = relationship()
+
+
 class OnboardingSession(Base):
     """One agentic registration attempt, before it becomes a Startup.
 
@@ -371,6 +413,7 @@ class OnboardingSession(Base):
     tool_results: Mapped[dict | None] = mapped_column(JSON)  # tool -> raw payload
     events: Mapped[list | None] = mapped_column(JSON)
     startup_id: Mapped[str | None] = mapped_column(String(36))
+    user_id: Mapped[str | None] = mapped_column(String(36), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_now, onupdate=_now)
 

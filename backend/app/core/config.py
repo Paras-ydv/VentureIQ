@@ -40,6 +40,11 @@ class Settings(BaseSettings):
     cache_db_path: str = str(BACKEND_DIR / "cache.db")
     linkedin_cache_days: int = 90
     rapidapi_monthly_budget: int = 45
+
+    # Auth. Set VIQ_JWT_SECRET in deployment; locally a secret is generated
+    # into backend/artifacts/ on first use so logins survive restarts.
+    jwt_secret: str | None = None
+    jwt_expire_minutes: int = 60 * 24 * 7
     # The MCA registry lives in its own file so scripts/bootstrap.py (which
     # rebuilds the main database) never wipes a multi-lakh import.
     registry_db_path: str = str(BACKEND_DIR / "registry.db")

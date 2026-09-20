@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, type Stage } from "../lib/api";
 import { STAGE_LABEL } from "../lib/format";
 import { Card, SectionHeader } from "../components/primitives";
+import { useAuth } from "../lib/auth";
 import { useInvestor } from "../lib/investor-context";
 
 const SECTORS = [
@@ -56,7 +57,8 @@ function Toggle({
  */
 export default function Onboarding() {
   const navigate = useNavigate();
-  const { refresh, setCurrentId } = useInvestor();
+  const { refresh } = useInvestor();
+  const { user, refresh: refreshUser } = useAuth();
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -72,6 +74,13 @@ export default function Onboarding() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (user) {
+      setName((n) => n || user.name);
+      setEmail((e) => e || user.email);
+    }
+  }, [user]);
+
   const toggle = (arr: string[], set: (v: string[]) => void) => (v: string) =>
     set(arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
 
@@ -80,24 +89,16 @@ export default function Onboarding() {
     setBusy(true);
     setError(null);
     try {
-      const inv = await api.createInvestor({
-        name,
-        email: email || null,
-        investor_type: type,
-        firm_name: firm || null,
-        sebi_registration_no: sebi || null,
-        accredited_investor: Boolean(sebi),
-        preference: {
-          ticket_size_min: Number(tmin) || null,
-          ticket_size_max: Number(tmax) || null,
-          stage_preference: stages,
-          preferred_sectors: sectors,
-          geographic_preference: geos,
-          risk_tolerance: risk,
-        },
+      // The mandate attaches to the signed-in investor account.
+      await api.setMandate({
+        ticket_size_min: Number(tmin) || null,
+        ticket_size_max: Number(tmax) || null,
+        stage_preference: stages,
+        preferred_sectors: sectors,
+        geographic_preference: geos,
+        risk_tolerance: risk,
       });
-      await refresh();
-      setCurrentId(inv.investor_id);
+      await Promise.all([refreshUser(), refresh()]);
       navigate("/feed");
     } catch (err) {
       setError(String(err instanceof Error ? err.message : err));
@@ -262,7 +263,7 @@ export default function Onboarding() {
         )}
 
         <button type="submit" className="btn btn-primary" disabled={busy}>
-          {busy ? "Creating…" : "Create profile & view feed"}
+          {busy ? "Saving…" : user?.has_mandate ? "Update mandate & view feed" : "Save mandate & view feed"}
         </button>
       </form>
     </div>

@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import { api, type Investor } from "./api";
+import { useAuth } from "./auth";
 
 interface Ctx {
   investors: Investor[];
@@ -33,23 +34,28 @@ const InvestorContext = createContext<Ctx>({
 const STORAGE_KEY = "viq.investor";
 
 export function InvestorProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
   const [investors, setInvestors] = useState<Investor[]>([]);
-  const [currentId, setCurrentIdState] = useState<string | null>(
-    () => localStorage.getItem(STORAGE_KEY),
-  );
+  const [currentId, setCurrentIdState] = useState<string | null>(null);
 
+  // The active investor is the one this account owns — no switching between
+  // other people's profiles.
   const refresh = useCallback(async () => {
+    if (!user?.investor_id) {
+      setInvestors([]);
+      setCurrentIdState(null);
+      return;
+    }
     try {
-      const list = await api.investors();
-      setInvestors(list);
-      setCurrentIdState((prev) => {
-        if (prev && list.some((i) => i.investor_id === prev)) return prev;
-        return list[0]?.investor_id ?? null;
-      });
+      const mine = await api.investor(user.investor_id);
+      setInvestors([mine]);
+      setCurrentIdState(mine.investor_id);
+      localStorage.setItem(STORAGE_KEY, mine.investor_id);
     } catch {
       setInvestors([]);
+      setCurrentIdState(null);
     }
-  }, []);
+  }, [user?.investor_id]);
 
   useEffect(() => {
     void refresh();

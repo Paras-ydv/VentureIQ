@@ -6,9 +6,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.routes.startups import _summary
+from app.api.deps import current_user, owns_investor
 from app.core.database import get_db
 from app.ml.matching import build_feed
-from app.models import AuditLog, BehavioralEvent, Investor, InvestorPreference
+from app.models import AuditLog, BehavioralEvent, Investor, InvestorPreference, User
 from app.schemas.dto import EventIn, InvestorIn, InvestorOut, MatchOut
 
 router = APIRouter(prefix="/api/investors", tags=["investors"])
@@ -81,7 +82,9 @@ def feed(
     exclude_seen: bool = False,
     min_composite: float | None = Query(None, ge=0, le=100),
     db: Session = Depends(get_db),
+    user: User = Depends(current_user),
 ):
+    owns_investor(investor_id, user)
     """Personalised ranked startup feed.
 
     With fewer than 5 behavioural events the response is flagged `cold_start`
@@ -116,7 +119,9 @@ def feed(
 
 
 @router.get("/{investor_id}/activity")
-def activity(investor_id: str, limit: int = 40, db: Session = Depends(get_db)):
+def activity(investor_id: str, limit: int = 40, db: Session = Depends(get_db),
+             user: User = Depends(current_user)):
+    owns_investor(investor_id, user)
     from app.models import Startup
 
     events = (
@@ -156,7 +161,7 @@ events_router = APIRouter(prefix="/api/events", tags=["events"])
 
 
 @events_router.post("", status_code=202)
-def track(payload: EventIn, db: Session = Depends(get_db)):
+def track(payload: EventIn, db: Session = Depends(get_db), user: User = Depends(current_user)):
     """Ingest one behavioural event.
 
     In the report this is a Kafka produce so the write never blocks the
@@ -164,8 +169,7 @@ def track(payload: EventIn, db: Session = Depends(get_db)):
     the fire-and-forget contract (202, no body) so a producer can be dropped in
     front without changing any caller.
     """
-    if not db.query(Investor).filter(Investor.investor_id == payload.investor_id).first():
-        raise HTTPException(404, "Investor not found")
+    owns_investor(payload.investor_id, user)
 
     db.add(
         BehavioralEvent(
@@ -180,8 +184,10 @@ def track(payload: EventIn, db: Session = Depends(get_db)):
 
 
 @events_router.post("/batch", status_code=202)
-def track_batch(payloads: list[EventIn], db: Session = Depends(get_db)):
+def track_batch(payloads: list[EventIn], db: Session = Depends(get_db),
+                user: User = Depends(current_user)):
     for p in payloads[:200]:
+        owns_investor(p.investor_id, user)
         db.add(
             BehavioralEvent(
                 investor_id=p.investor_id,

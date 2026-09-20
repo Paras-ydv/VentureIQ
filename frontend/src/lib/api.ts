@@ -3,11 +3,42 @@
 // backend's public URL at build time, e.g. https://api.example.com/api
 const BASE = (import.meta.env.VITE_API_BASE ?? "/api").replace(/\/$/, "");
 
+const TOKEN_KEY = "viq.token";
+
+export function getToken(): string | null {
+  try {
+    return localStorage.getItem(TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function setToken(token: string | null): void {
+  try {
+    if (token) localStorage.setItem(TOKEN_KEY, token);
+    else localStorage.removeItem(TOKEN_KEY);
+  } catch {
+    /* private mode: the session simply won't persist */
+  }
+}
+
+/** Raised on 401 so callers can send the visitor to sign in. */
+export class Unauthorized extends Error {}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = getToken();
   const res = await fetch(`${BASE}${path}`, {
-    headers: { "Content-Type": "application/json" },
     ...init,
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(init?.headers ?? {}),
+    },
   });
+  if (res.status === 401) {
+    setToken(null);
+    throw new Unauthorized("Your session has expired — sign in again");
+  }
   if (!res.ok) {
     let detail = `${res.status} ${res.statusText}`;
     try {
@@ -311,6 +342,37 @@ export interface AgentTool {
   consent: string;
 }
 
+export interface AuthUser {
+  user_id: string;
+  email: string;
+  name: string;
+  role: "investor" | "founder";
+  investor_id: string | null;
+  investor_name: string | null;
+  kyc_status: string | null;
+  has_mandate: boolean;
+  watchlist_count: number;
+  created_at: string;
+}
+
+export interface WatchlistItem {
+  item_id: string;
+  startup_id: string;
+  note: string | null;
+  stage: "watching" | "contacted" | "passed";
+  created_at: string;
+  startup: {
+    startup_id: string;
+    legal_name: string;
+    sector: string;
+    stage: Stage;
+    hq_city: string | null;
+    verified: boolean;
+    composite_score: number | null;
+    fraud_likelihood_score: number | null;
+  } | null;
+}
+
 export interface Alert {
   signal_id: string;
   startup_id: string;
@@ -387,10 +449,41 @@ export const api = {
     // backend mirrors this with a 202 and no body.
     fetch(`${BASE}/events`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        // This path bypasses request() for keepalive, so it carries the token itself.
+        ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}),
+      },
       body: JSON.stringify(body),
       keepalive: true,
     }).catch(() => undefined),
+
+  register: (body: {
+    email: string;
+    password: string;
+    name: string;
+    role: "investor" | "founder";
+    investor_type?: string;
+    firm_name?: string | null;
+  }) => request<{ access_token: string; user: AuthUser }>("/auth/register", { method: "POST", body: JSON.stringify(body) }),
+  login: (email: string, password: string) =>
+    request<{ access_token: string; user: AuthUser }>("/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    }),
+  me: () => request<AuthUser>("/auth/me"),
+  updateMe: (body: { name?: string; current_password?: string; new_password?: string }) =>
+    request<AuthUser>("/auth/me", { method: "PATCH", body: JSON.stringify(body) }),
+  setMandate: (body: unknown) =>
+    request<AuthUser>("/auth/me/mandate", { method: "PUT", body: JSON.stringify(body) }),
+  watchlist: () => request<WatchlistItem[]>("/auth/me/watchlist"),
+  watch: (startup_id: string, body: { note?: string | null; stage?: string } = {}) =>
+    request<WatchlistItem>("/auth/me/watchlist", {
+      method: "POST",
+      body: JSON.stringify({ startup_id, ...body }),
+    }),
+  unwatch: (startup_id: string) =>
+    request<void>(`/auth/me/watchlist/${startup_id}`, { method: "DELETE" }),
 
   registryStatus: () => request<RegistryStatus>("/registry/status"),
   registrySearch: (q: string, opts: { limit?: number; active_only?: boolean; state?: string } = {}) => {

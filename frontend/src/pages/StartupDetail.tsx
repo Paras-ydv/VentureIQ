@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { m } from "motion/react";
 import { useToast } from "../components/ui/Toast";
-import { Link, useParams } from "react-router-dom";
+import { useAuth } from "../lib/auth";
+import { Link, useParams, useNavigate } from "react-router-dom";
 import { api, type Benchmark, type StartupDetail as Detail, type StartupSummary } from "../lib/api";
 import {
   compactNum,
@@ -132,6 +133,49 @@ export default function StartupDetail() {
   const [interested, setInterested] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const toast = useToast();
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const [saved, setSaved] = useState(false);
+  const [savePending, setSavePending] = useState(false);
+
+  // Is this company already on the signed-in investor's watchlist?
+  useEffect(() => {
+    if (!user) {
+      setSaved(false);
+      return;
+    }
+    let live = true;
+    api
+      .watchlist()
+      .then((items) => live && setSaved(items.some((i) => i.startup_id === id)))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [user, id]);
+
+  async function toggleSaved() {
+    if (!user) {
+      navigate(`/login?next=${encodeURIComponent(`/startup/${id}`)}`);
+      return;
+    }
+    setSavePending(true);
+    const next = !saved;
+    try {
+      if (next) {
+        await api.watch(id!);
+        toast({ title: "Saved", body: "It's on your watchlist and will shape your feed.", tone: "good" });
+      } else {
+        await api.unwatch(id!);
+        toast({ title: "Removed from your watchlist" });
+      }
+      setSaved(next);
+    } catch (e) {
+      toast({ title: "Couldn't update your watchlist", body: (e as Error).message, tone: "warning" });
+    } finally {
+      setSavePending(false);
+    }
+  }
   const [prevScores, setPrevScores] = useState<Record<string, number> | null>(null);
   const [activeDim, setActiveDim] = useState<string>("growth_potential");
   const [activeTab, setActiveTab] = useState("summary");
@@ -326,6 +370,14 @@ export default function StartupDetail() {
               {enriching ? "Running agent…" : "Run verification agent"}
             </button>
             <div className="flex gap-2">
+              <button
+                className="btn h-11 flex-1"
+                onClick={() => void toggleSaved()}
+                disabled={savePending}
+                aria-pressed={saved}
+              >
+                {saved ? "★ Saved" : "☆ Save"}
+              </button>
               <button
                 className="btn h-11 flex-1"
                 disabled={interested}
