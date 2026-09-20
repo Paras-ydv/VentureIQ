@@ -43,6 +43,8 @@ Copy `backend/.env.example` to `backend/.env` and fill in what you have:
 
 - `VIQ_GITHUB_TOKEN` — fine-grained token with *Public repositories (read-only)*;
   raises GitHub's limit from 60 to 5,000 requests/hour.
+- `VIQ_JWT_SECRET` — signing key for login tokens. Optional locally, required
+  in deployment so sessions survive a restart.
 - `VIQ_RAPIDAPI_KEY` — RapidAPI key subscribed to `linkedin-scraper27`, for
   founder LinkedIn profiles. Check it with
   `python scripts/check_linkedin.py <profile-url>`.
@@ -109,6 +111,8 @@ its "couldn't load" state — nothing is hard-coded.
 
 | Layer | Status | Notes |
 |---|---|---|
+| Accounts & authorisation | **Real** | Email + password with bcrypt, JWT sessions, investor and founder roles. Feeds, activity, watchlists and event writes are owned by one account and refused to everyone else |
+| Investor watchlist | **Real** | Saved companies with private notes and a pipeline stage; saving also feeds the matcher |
 | Startup registration | **Real** | Agentic: four fields in, the agent researches the rest live (company website, RDAP, DNS, GitHub, corpus, sector classifier, CIN/GSTIN decoding) and every field gets a verified / auto-filled / conflict status. The classic stage-conditional form remains at `/submit` |
 | Growth-potential model | **Real** | Gradient boosting on 1,896 labelled YC companies, **AUROC 0.741** held out |
 | Risk / founder scoring | **Real** | Additive models over runway, burn efficiency, competitive density, founder track record |

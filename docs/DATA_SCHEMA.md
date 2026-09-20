@@ -143,6 +143,31 @@ A `startup` is linked to a registry company by `startup.cin`.
 
 ---
 
+## 1b. Accounts
+
+### `app_user`
+| Field | Type | Notes |
+|---|---|---|
+| `user_id` | UUID **PK** | |
+| `email` | text, unique | lower-cased on write |
+| `password_hash` | text | bcrypt; null for future OAuth-only accounts |
+| `name` | text | |
+| `role` | enum(`investor`,`founder`) | re-read from here on every request, never trusted from the token |
+| `auth_provider`, `provider_subject` | text | seam for Google/LinkedIn OAuth |
+| `investor_id` | FK, nullable | investors own exactly one profile |
+| `is_active`, `created_at`, `last_login_at` | | |
+
+### `watchlist_item`
+| Field | Type | Notes |
+|---|---|---|
+| `item_id` | UUID **PK** | |
+| `user_id`, `startup_id` | FK | unique together |
+| `note` | text | private to the user |
+| `stage` | enum(`watching`,`contacted`,`passed`) | |
+| `created_at` | timestamp | saving also writes a `save` behavioural event |
+
+---
+
 ## 2. Investor
 
 ### 2.1 `investor`
