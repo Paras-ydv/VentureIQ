@@ -353,6 +353,9 @@ class Listing(Base):
     fair_value_estimate: Mapped[float | None] = mapped_column(Float)
     status: Mapped[str] = mapped_column(String(24), default="open")
     simulated: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_by_user_id: Mapped[str | None] = mapped_column(String(36), index=True)
+    rofr_days: Mapped[int] = mapped_column(Integer, default=7)
+    notes: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
 
 
@@ -395,6 +398,55 @@ class WatchlistItem(Base):
 
     user: Mapped[User] = relationship(back_populates="watchlist")
     startup: Mapped[Startup] = relationship()
+
+
+class KycCase(Base):
+    """One identity-verification attempt (report Layer 1: Auth & KYC).
+
+    What is real here: the document is read, the PAN's format and embedded
+    details are checked, and the name on it is compared with the account. What
+    is NOT real: the identity decision itself. A licensed provider (or
+    DigiLocker/Aadhaar e-KYC under the right contracts) makes that call, so
+    `status` stops at `passed_checks` until a human reviewer signs it off.
+    """
+
+    __tablename__ = "kyc_case"
+
+    case_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(ForeignKey("app_user.user_id"), index=True)
+    investor_id: Mapped[str | None] = mapped_column(String(36), index=True)
+    pan: Mapped[str | None] = mapped_column(String(16))
+    legal_name: Mapped[str | None] = mapped_column(String(200))
+    document_path: Mapped[str | None] = mapped_column(String(512))
+    document_type: Mapped[str | None] = mapped_column(String(48))
+    checks: Mapped[list | None] = mapped_column(JSON)
+    # submitted -> passed_checks | failed_checks -> verified | rejected
+    status: Mapped[str] = mapped_column(String(24), default="submitted", index=True)
+    reviewer_note: Mapped[str | None] = mapped_column(Text)
+    reviewed_by: Mapped[str | None] = mapped_column(String(36))
+    submitted_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+
+class Offer(Base):
+    """An expression of interest against a listing. SIMULATED throughout:
+    no money moves, and escrow is a state machine, not a payment rail."""
+
+    __tablename__ = "offer"
+
+    offer_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    listing_id: Mapped[str] = mapped_column(ForeignKey("listing.listing_id"), index=True)
+    investor_id: Mapped[str] = mapped_column(ForeignKey("investor.investor_id"), index=True)
+    user_id: Mapped[str] = mapped_column(String(36), index=True)
+    amount: Mapped[float] = mapped_column(Float)
+    equity_pct: Mapped[float | None] = mapped_column(Float)
+    message: Mapped[str | None] = mapped_column(Text)
+    # offered -> accepted|declined -> (rofr_window) -> escrow_simulated -> settled_simulated
+    status: Mapped[str] = mapped_column(String(32), default="offered", index=True)
+    compliance: Mapped[dict | None] = mapped_column(JSON)
+    rofr_expires_at: Mapped[datetime | None] = mapped_column(DateTime)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_now, onupdate=_now)
 
 
 class OnboardingSession(Base):

@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 
 from app.api.routes import (
-    analytics, auth, documents, investors, oauth, onboarding, registry, startups,
+    analytics, auth, documents, investors, kyc, marketplace, oauth, onboarding, registry, startups,
 )
 from app.core.config import settings
 from app.core.database import Base, engine, ensure_columns
@@ -67,6 +67,8 @@ app.include_router(analytics.market)
 app.include_router(onboarding.router)
 app.include_router(registry.router)
 app.include_router(documents.router)
+app.include_router(kyc.router)
+app.include_router(marketplace.router)
 
 
 @app.get("/api/health", tags=["health"])

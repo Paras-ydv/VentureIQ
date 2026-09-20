@@ -9,6 +9,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.config import ARTIFACTS
+from app.api.deps import current_user
 from app.core.database import get_db
 from app.models import (
     AuditLog,
@@ -18,6 +19,7 @@ from app.models import (
     FundingRound,
     Investor,
     Listing,
+    User,
     Score,
     Startup,
     StartupFinancials,
@@ -340,11 +342,18 @@ def create_listing(
     startup_id: str,
     ask_amount: float = Query(..., gt=0),
     equity_offered_pct: float = Query(..., gt=0, le=100),
+    rofr_days: int = Query(7, ge=0, le=90),
     db: Session = Depends(get_db),
+    user: User = Depends(current_user),
 ):
     s = db.query(Startup).filter(Startup.startup_id == startup_id).first()
     if not s:
         raise HTTPException(404, "Startup not found")
+    # Only the founder who registered a company may list it.
+    if s.owner_user_id and s.owner_user_id != user.user_id:
+        raise HTTPException(403, "Only the founder who registered this company can list it")
+    if not s.owner_user_id and user.role != "founder":
+        raise HTTPException(403, "Only a founder account can create a listing")
 
     score = s.latest_score
     # Compliance-as-code: a company flagged for fraud cannot be listed.
@@ -365,10 +374,13 @@ def create_listing(
         equity_offered_pct=equity_offered_pct,
         fair_value_estimate=_fair_value(db, s),
         simulated=True,
+        created_by_user_id=user.user_id,
+        rofr_days=rofr_days,
     )
     db.add(ls)
     db.add(
         AuditLog(
+            actor_id=user.user_id,
             action="listing.created",
             entity_type="listing",
             entity_id=ls.listing_id,

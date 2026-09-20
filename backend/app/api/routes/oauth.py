@@ -156,6 +156,9 @@ async def callback(
             auth_provider="google",
             provider_subject=profile.get("sub"),
             password_hash=None,
+            # Set explicitly: column defaults are applied on INSERT, and this is
+            # checked before the row is written.
+            is_active=True,
         )
         if role == "investor":
             investor = Investor(name=user.name, email=email, investor_type="angel")
@@ -167,7 +170,8 @@ async def callback(
     elif not user.provider_subject:
         # Existing password account, same person: link it.
         user.provider_subject = profile.get("sub")
-    if not user.is_active:
+    if user.is_active is False:
+        log.warning("Google sign-in for a disabled account: %s", email)
         return RedirectResponse(_frontend("/login", "error=account_disabled"), status_code=303)
 
     user.last_login_at = datetime.now(UTC).replace(tzinfo=None)

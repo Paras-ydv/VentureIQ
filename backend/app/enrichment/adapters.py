@@ -241,6 +241,28 @@ class GSTNAdapter(SourceAdapter):
     name = "gstn"
 
     async def fetch(self, startup: Any, **kwargs: Any) -> dict[str, Any]:
+        from app.enrichment import gst
+
+        if gst.enabled() and startup.gstin:
+            try:
+                profile = gst.parse(await gst.fetch(startup.gstin))
+            except (httpx.HTTPError, RuntimeError):
+                profile = None
+            if profile and profile.get("legal_name"):
+                fin = startup.latest_financials
+                return {
+                    "source": gst.SOURCE,
+                    "gstin": startup.gstin,
+                    "legal_name": profile["legal_name"],
+                    "filing_status": profile.get("taxpayer_type"),
+                    "registration_date": profile.get("registration_date"),
+                    "status": profile.get("status"),
+                    "registration_verified": profile["active"],
+                    # Turnover is not in the public register.
+                    "gst_reported_annual_revenue": fin.gst_reported_revenue if fin else None,
+                    "_turnover_note": "Turnover needs a consented GSP pull; not included here",
+                }
+
         rng = _seed_for("gstn", startup.legal_name)
         fin = startup.latest_financials
         filed = fin.gst_reported_revenue if fin else None

@@ -36,6 +36,11 @@ class Settings(BaseSettings):
     linkedin_api_host: str = "linkedin-scraper27.p.rapidapi.com"
     linkedin_api_path: str = "/profile/detail"
     linkedin_api_param: str = "username"
+    # GST taxpayer search vendor (optional). Public register data only; returns
+    # and turnover stay consent-gated and mocked.
+    gst_api_host: str | None = None
+    gst_api_path: str = "/gstin/{gstin}"
+    gst_api_param: str | None = None
     # Paid quota: cache profiles hard, and stop before the monthly cap.
     cache_db_path: str = str(BACKEND_DIR / "cache.db")
     linkedin_cache_days: int = 90

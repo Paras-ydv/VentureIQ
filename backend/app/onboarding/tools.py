@@ -105,10 +105,12 @@ TOOLS: dict[str, dict[str, str]] = {
         "consent": "Open government data (GODL-India).",
     },
     "gstn": {
-        "label": "GST filings", "kind": "mock",
-        "what": "Filing status and GST-reported turnover, to reconcile your revenue claim.",
-        "how": "Production: a consented pull through a GST Suvidha Provider. Mocked here.",
-        "consent": "Needs your explicit consent for each pull.",
+        "label": "GST register", "kind": "network",
+        "what": "Legal name, status, registration date and state for a GSTIN; and, with consent, "
+               "turnover to reconcile your revenue claim.",
+        "how": "Taxpayer details come from the public GST search when a vendor is configured. "
+               "Turnover needs a consented pull through a GST Suvidha Provider, so that part is mocked.",
+        "consent": "Public register; turnover needs your explicit consent per pull.",
     },
     "linkedin_company": {
         "label": "LinkedIn", "kind": "mock",
@@ -841,6 +843,36 @@ async def mca21(ctx: Run, args: dict) -> dict:
 
 
 async def gstn(ctx: Run, args: dict) -> dict:
+    from app.enrichment import gst
+
+    gstin = args["gstin"]
+    if gst.enabled():
+        try:
+            profile = gst.parse(await gst.fetch(gstin))
+        except (httpx.HTTPError, gst.QuotaExceeded, RuntimeError) as exc:
+            raise ToolError(f"GST lookup failed: {type(exc).__name__}") from exc
+        if not profile.get("legal_name"):
+            ctx.find("gstin", "gstn", None, kind="network", force="disagree",
+                     note="This GSTIN isn't in the GST taxpayer register")
+            return {"summary": f"{gstin} not found in the GST register", "data": {"found": False}}
+        note = f"{profile['status'] or 'status unknown'} · {profile.get('taxpayer_type') or 'taxpayer'}"
+        ctx.find("gstin", "gstn", gstin, kind="network",
+                 force="agree" if profile["active"] else "disagree", note=note)
+        ctx.find("legal_name", "gstn", profile["legal_name"].title(), kind="network",
+                 note="Legal name on the GST register")
+        if profile.get("state"):
+            ctx.find("hq_state", "gstn", profile["state"].split(",")[0].strip(), kind="network",
+                     note="State jurisdiction on the GST register")
+        if not profile["active"]:
+            ctx.think(f"The GST register lists this GSTIN as “{profile['status']}”, not Active.")
+        ctx.facts["gst_profile"] = profile
+        # Turnover is not public; the consented pull is still simulated.
+        rng = _seed_for("onboard-gstn", gstin)
+        return {"summary": f"{profile['legal_name'].title()} — {profile['status']}"
+                           f"{', registered ' + profile['registration_date'] if profile['registration_date'] else ''}",
+                "data": {"found": True, **{k: v for k, v in profile.items() if not k.startswith("_")},
+                         "turnover_factor": rng.choice([0.94, 0.97, 1.0, 1.02, 0.96, 0.99, 0.58])}}
+
     await asyncio.sleep(0.5)
     rng = _seed_for("onboard-gstn", args["gstin"])
     returns = rng.randint(9, 12)
