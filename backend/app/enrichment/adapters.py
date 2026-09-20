@@ -8,7 +8,7 @@ knowing how any of them work. That planner/executor split is what makes this
 Which sources are real, and why:
 
   github   REAL   public REST API, no consent flow needed for public data
-  mca21    MOCK   per-company and fee-gated; no bulk access exists
+  mca21    REAL   MCA master data (data.gov.in); mock only without the import
   gstn     MOCK   requires the taxpayer's per-pull consent (account aggregator)
   linkedin REAL*  third-party RapidAPI aggregator when VIQ_RAPIDAPI_KEY is set,
                   otherwise mocked; see app/enrichment/linkedin.py
@@ -21,8 +21,10 @@ return deterministically-seeded, realistically-shaped data and always set
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import random
+import re
 from abc import ABC, abstractmethod
 from typing import Any
 
@@ -41,6 +43,23 @@ class SourceAdapter(ABC):
 
     def applicable(self, startup: Any) -> bool:
         return True
+
+
+def _looks_indian(startup: Any) -> bool:
+    from app.onboarding.checks import CIN_STATES, CITY_STATE, canon_city
+
+    if getattr(startup, "cin", None) or getattr(startup, "gstin", None):
+        return True
+    state = (getattr(startup, "hq_state", None) or "").strip().lower()
+    if state and state in {v.lower() for v in CIN_STATES.values()}:
+        return True
+    return canon_city(getattr(startup, "hq_city", None)) in CITY_STATE
+
+
+def _norm(name: str) -> str:
+    """Compare registered names without punctuation or legal suffixes."""
+    stripped = re.sub(r"(?i)\b(private|pvt|limited|ltd|llp)\b", " ", name or "")
+    return re.sub(r"[^a-z0-9]", "", stripped.lower())
 
 
 def _seed_for(*parts: str) -> random.Random:
@@ -116,14 +135,78 @@ class GitHubAdapter(SourceAdapter):
 class MCA21Adapter(SourceAdapter):
     """Ministry of Corporate Affairs registry lookup.
 
-    Real MCA21 is per-CIN, requires portal registration, and charges a fee for
-    anything past the basic fields --- so there is no bulk path. A production
-    build calls it one company at a time behind this same interface.
+    Real, via the MCA Company Master Data published on data.gov.in: by CIN
+    where we have one, otherwise by registered name. The MCA21 portal itself is
+    still fee-gated per document, but the master data (identity, status,
+    incorporation date, registered office) is open and is what this check needs.
+
+    The seeded mock below remains for companies with no Indian registration to
+    look up, and is always labelled `_mock`.
     """
 
     name = "mca21"
+    is_mock = False
 
     async def fetch(self, startup: Any, **kwargs: Any) -> dict[str, Any]:
+        from app.registry import store as registry
+
+        cin = (startup.cin or "").strip()
+        record, how = None, None
+        try:
+            if cin:
+                record, how = await registry.lookup_cin(cin)
+            elif registry.available():
+                hits = await asyncio.to_thread(registry.search_local, startup.legal_name, 5)
+                exact = [h for h in hits
+                         if _norm(h["name"]) == _norm(startup.legal_name)]
+                if len(exact) == 1:
+                    record, how = exact[0], "local"
+        except (httpx.HTTPError, OSError):
+            record = None
+
+        if record:
+            registered_year = int(record["registered"][:4]) if record.get("registered") else None
+            claimed_year = startup.founded_date.year if startup.founded_date else None
+            return {
+                "source": f"MCA Company Master Data ({'local copy' if how == 'local' else 'data.gov.in'})",
+                "cin": record["cin"],
+                "registered_name": record["name"],
+                "company_status": record.get("status"),
+                "registration_verified": record.get("status") == "Active",
+                "company_class": record.get("class"),
+                "authorized_capital_inr": record.get("authorized_capital"),
+                "paid_up_capital_inr": record.get("paidup_capital"),
+                "registered_state": record.get("state"),
+                "registered_office": record.get("address"),
+                "date_of_incorporation": record.get("registered"),
+                "name_matches_filing": _norm(record["name"]).startswith(_norm(startup.legal_name)[:12])
+                or _norm(startup.legal_name).startswith(_norm(record["name"])[:12]),
+                "incorporation_matches_claim": (
+                    None if not (registered_year and claimed_year)
+                    else abs(registered_year - claimed_year) <= 1
+                ),
+            }
+
+        if not _looks_indian(startup):
+            # Absence from an Indian registry says nothing about a foreign
+            # company, so this must not count as a failed verification.
+            return {
+                "source": "MCA Company Master Data",
+                "not_applicable": True,
+                "registration_verified": None,
+                "reason": "No Indian registration to check (no CIN, GSTIN or Indian address)",
+            }
+
+        if cin or registry.available():
+            # We could look and found nothing: that is a real, reportable answer.
+            return {
+                "source": "MCA Company Master Data",
+                "cin": cin or None,
+                "company_status": "Not found",
+                "registration_verified": False,
+                "searched_by": "cin" if cin else "name",
+            }
+
         rng = _seed_for("mca21", startup.legal_name)
         registered = rng.random() > 0.08  # most real companies are registered
         founded = startup.founded_date

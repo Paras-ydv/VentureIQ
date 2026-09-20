@@ -16,6 +16,7 @@ import {
 } from "../lib/api";
 import { STAGE_LABEL } from "../lib/format";
 import { Badge, Card } from "../components/primitives";
+import DocumentUpload from "../components/DocumentUpload";
 import { RegistryRow, titleName, useRegistrySearch } from "../components/RegistryMatches";
 import { useToast } from "../components/ui/Toast";
 
@@ -603,6 +604,20 @@ function Workspace({ sid, onRestart }: { sid: string; onRestart: () => void }) {
                   gstLinked={g === "Financials" && !!snap.facts.gst_turnover_factor}
                 />
               ))}
+              <DocumentUpload
+                sessionId={sid}
+                onDone={(r) => {
+                  if (r.snapshot) setSnap(r.snapshot);
+                  const conflicts = r.checks.filter((c) => c.status === "conflict").length;
+                  toast({
+                    title: `${r.doc_type_label} read`,
+                    body: conflicts
+                      ? `${conflicts} thing${conflicts > 1 ? "s" : ""} to resolve — see the document card.`
+                      : `${r.fields.length} field(s) taken from it.`,
+                    tone: conflicts ? "warning" : "good",
+                  });
+                }}
+              />
               <Founders
                 founders={snap.founders}
                 busyKey={busyKey}

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { m } from "motion/react";
+import DocumentUpload from "../components/DocumentUpload";
 import { useToast } from "../components/ui/Toast";
 import { useAuth } from "../lib/auth";
 import { Link, useParams, useNavigate } from "react-router-dom";
@@ -791,6 +792,8 @@ export default function StartupDetail() {
               <Empty title="No enrichment yet" hint="Run the verification agent to cross-check this profile." />
             )}
           </Card>
+
+          <DocumentUpload startupId={s.startup_id} compact />
         </div>
       </div>
 

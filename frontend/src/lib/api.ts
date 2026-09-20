@@ -355,6 +355,70 @@ export interface AuthUser {
   created_at: string;
 }
 
+export interface DocField {
+  key: string;
+  value: any;
+  confidence: number;
+  evidence: string;
+  note: string;
+}
+
+export interface DocCheck {
+  check: string;
+  status: "verified" | "conflict";
+  detail: string;
+  source: string;
+  kind: EvidenceKind;
+}
+
+export interface DocResult {
+  document_id?: string;
+  filename: string;
+  doc_type: string;
+  doc_type_label: string;
+  type_confidence: number;
+  engine: string;
+  pages: number;
+  ocr_confidence: number | null;
+  warnings: string[];
+  fields: DocField[];
+  checks: DocCheck[];
+  text_preview: string;
+  snapshot?: OnboardSnapshot;
+}
+
+export interface StoredDoc {
+  document_id: string;
+  doc_type: string;
+  doc_type_label: string;
+  filename: string;
+  uploaded_at: string;
+  extraction_confidence: number | null;
+  fields: DocField[];
+  checks: DocCheck[];
+}
+
+export interface MyStartup {
+  startup_id: string;
+  legal_name: string;
+  sector: string;
+  stage: Stage;
+  hq_city: string | null;
+  website: string | null;
+  cin: string | null;
+  verified: boolean;
+  created_at: string;
+  composite_score: number | null;
+  growth_potential_score: number | null;
+  risk_level_score: number | null;
+  fraud_likelihood_score: number | null;
+  founder_credibility_score: number | null;
+  confidence: string | null;
+  scored_at: string | null;
+  open_flags: number;
+  top_flag: string | null;
+}
+
 export interface WatchlistItem {
   item_id: string;
   startup_id: string;
@@ -476,6 +540,37 @@ export const api = {
     request<AuthUser>("/auth/me", { method: "PATCH", body: JSON.stringify(body) }),
   setMandate: (body: unknown) =>
     request<AuthUser>("/auth/me/mandate", { method: "PUT", body: JSON.stringify(body) }),
+  myStartups: () => request<MyStartup[]>("/auth/me/startups"),
+  docCapabilities: () =>
+    request<{ ocr_available: boolean; detail: string; max_file_mb: number; accepted: string[]; checks: string[] }>(
+      "/documents/capabilities",
+    ),
+  startupDocuments: (id: string) => request<StoredDoc[]>(`/startups/${id}/documents`),
+  /** Multipart upload: the browser sets its own Content-Type boundary. */
+  uploadDocument: async (target: { startupId?: string; sessionId?: string }, file: File) => {
+    const body = new FormData();
+    body.append("file", file);
+    const token = getToken();
+    const path = target.startupId
+      ? `/startups/${target.startupId}/documents`
+      : `/onboarding/sessions/${target.sessionId}/documents`;
+    const res = await fetch(`${BASE}${path}`, {
+      method: "POST",
+      body,
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+    if (!res.ok) {
+      let detail = `${res.status} ${res.statusText}`;
+      try {
+        const b = await res.json();
+        if (b?.detail) detail = typeof b.detail === "string" ? b.detail : detail;
+      } catch {
+        /* keep the status line */
+      }
+      throw new Error(detail);
+    }
+    return (await res.json()) as DocResult;
+  },
   watchlist: () => request<WatchlistItem[]>("/auth/me/watchlist"),
   watch: (startup_id: string, body: { note?: string | null; stage?: string } = {}) =>
     request<WatchlistItem>("/auth/me/watchlist", {

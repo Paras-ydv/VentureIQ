@@ -53,8 +53,14 @@ numpy==2.5.3
     #   pandas
     #   scikit-learn
     #   scipy
+packaging==26.3
+    # via pytesseract
 pandas==3.0.5
     # via ventureiq-backend (pyproject.toml)
+pillow==12.3.0
+    # via
+    #   ventureiq-backend (pyproject.toml)
+    #   pytesseract
 pyasn1==0.6.4
     # via
     #   python-jose
@@ -69,6 +75,8 @@ pydantic==2.13.5
 pydantic-core==2.46.5
     # via pydantic
 pydantic-settings==2.15.0
+    # via ventureiq-backend (pyproject.toml)
+pytesseract==0.3.13
     # via ventureiq-backend (pyproject.toml)
 python-dateutil==2.9.0.post0
     # via pandas

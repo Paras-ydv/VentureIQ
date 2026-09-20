@@ -49,6 +49,7 @@ class Run:
         self.tool_results: dict[str, Any] = dict(row.tool_results or {})
         self.events: list[dict] = list(row.events or [])
         self.startup_id = row.startup_id
+        self.user_id = row.user_id
         self.facts: dict[str, Any] = dict(self.tool_results.get("_facts", {}))
         self._tick = asyncio.Event()
         self._t0 = time.monotonic()
@@ -155,6 +156,7 @@ class Run:
             row.tool_results = {**self.tool_results, "_facts": self.facts}
             row.events = self.events
             row.startup_id = self.startup_id
+            row.user_id = self.user_id
             db.commit()
         finally:
             db.close()
@@ -163,10 +165,11 @@ class Run:
 RUNS: dict[str, Run] = {}
 
 
-def create_session(inputs: dict[str, Any]) -> Run:
+def create_session(inputs: dict[str, Any], user_id: str | None = None) -> Run:
     db = SessionLocal()
     try:
-        row = OnboardingSession(inputs=inputs, evidence={}, overrides={}, tool_results={}, events=[])
+        row = OnboardingSession(inputs=inputs, evidence={}, overrides={}, tool_results={},
+                                events=[], user_id=user_id)
         db.add(row)
         db.commit()
         db.refresh(row)
@@ -519,6 +522,67 @@ async def check_founder(run: Run, index: int) -> dict:
     return f
 
 
+DOC_FIELD_MAP = {
+    "cin": "cin",
+    "gstin": "gstin",
+    "company_name": "legal_name",
+    "incorporation_date": "founded_year",
+    "revenue": "revenue",
+}
+
+
+def apply_document(run: Run, filename: str, path: Any, parsed: dict[str, Any]) -> None:
+    """A document the founder uploaded becomes evidence, the same as any source.
+
+    A document is the founder's own artefact, so on its own it is corroboration,
+    not proof — except where an independent source agrees with it, which is why
+    the registry checks travel with it.
+    """
+    label = parsed["doc_type_label"]
+    run._current_tool = "document"
+    registry_ok = any(c["check"] == "cin_in_registry" and c["status"] == "verified"
+                      for c in parsed["checks"])
+
+    for field in parsed["fields"]:
+        key = DOC_FIELD_MAP.get(field["key"])
+        if not key:
+            continue
+        value = field["value"]
+        if key == "founded_year":
+            value = int(str(value)[:4])
+        # The registry confirming the CIN is what lets a document verify anything.
+        kind = "dataset" if (registry_ok and key in ("cin", "legal_name", "founded_year")) else "local"
+        note = f"Read from {filename} ({label})"
+        if field.get("note"):
+            note += f" — {field['note']}"
+        run.find(key, "document", value, kind=kind, note=note,
+                 prefer=registry_ok and key in ("cin", "legal_name"))
+
+    for check in parsed["checks"]:
+        if check["status"] == "conflict":
+            run.think(f"{label}: {check['detail']}")
+
+    run.facts.setdefault("documents", []).append({
+        "filename": filename,
+        "doc_type": parsed["doc_type"],
+        "doc_type_label": label,
+        "pages": parsed["pages"],
+        "ocr_confidence": parsed["ocr_confidence"],
+        "stored_at": str(path),
+        "fields": [f["key"] for f in parsed["fields"]],
+        "checks": parsed["checks"],
+    })
+    run.tool_results[f"document-{len(run.facts['documents'])}"] = {
+        "tool": "document", "ok": True, "kind": "network", "ms": 0, "error": None,
+        "summary": f"{label}: {len(parsed['fields'])} field(s) read from {filename}"
+                   + (" · CIN confirmed in the MCA registry" if registry_ok else ""),
+        "data": {"filename": filename, "checks": parsed["checks"]},
+    }
+    run._current_tool = None
+    run.touch()
+    run.save()
+
+
 async def submit(run: Run) -> str:
     """Turn a reconciled session into a Startup, with provenance attached."""
     from app.api.routes.startups import _cohort_stats
@@ -526,7 +590,7 @@ async def submit(run: Run) -> str:
     from app.ml import rag
     from app.ml.scoring import compute_scores
     from app.models import (
-        AuditLog, EnrichmentRecord, Founder, FraudSignal, Startup, StartupFinancials,
+        AuditLog, EnrichmentRecord, Founder, FraudSignal, Startup, StartupDocument, StartupFinancials,
     )
 
     snap = run.snapshot()
@@ -560,6 +624,7 @@ async def submit(run: Run) -> str:
             employee_count=int(num("employee_count")) if num("employee_count") else None,
             source="registration",
             verified=bool(mca.get("ok") and mca.get("data", {}).get("found")),
+            owner_user_id=run.user_id,
         )
         db.add(s)
         db.flush()
@@ -577,6 +642,17 @@ async def submit(run: Run) -> str:
                 active_users=int(num("active_users")) if num("active_users") else None,
                 total_funding_usd=num("total_funding_usd"),
                 gst_reported_revenue=gst_ev["value"] if gst_ev else None,
+            ))
+
+        for doc in run.facts.get("documents", []):
+            db.add(StartupDocument(
+                startup_id=s.startup_id,
+                doc_type=doc["doc_type"],
+                filename=doc["filename"],
+                s3_key=doc.get("stored_at"),
+                layoutlm_entities={"fields": doc["fields"], "pages": doc["pages"]},
+                extraction_confidence=doc.get("ocr_confidence"),
+                deviation_flags=doc["checks"],
             ))
 
         stored_as = {"rdap": "whois"}

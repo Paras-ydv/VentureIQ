@@ -71,6 +71,8 @@ class Startup(Base):
 
     source: Mapped[str] = mapped_column(String(32), default="registration")
     verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    # The founder account that registered this company, when there was one.
+    owner_user_id: Mapped[str | None] = mapped_column(String(36), index=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_now, onupdate=_now)

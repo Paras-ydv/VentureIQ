@@ -19,10 +19,12 @@ import re
 from typing import Any
 from urllib.parse import urlsplit
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 
+from app.api.deps import optional_user
+from app.models import User
 from app.onboarding import agent, checks
 from app.onboarding.ledger import FIELDS, SPEC
 from app.onboarding.tools import TOOLS
@@ -99,10 +101,11 @@ def tools():
 
 
 @router.post("/sessions", status_code=201)
-async def start(payload: StartIn):
+async def start(payload: StartIn, user: User | None = Depends(optional_user)):
     if not payload.website and not payload.legal_name:
         raise HTTPException(422, "Give us a website, or the company name if you don't have one yet")
-    run = agent.create_session(payload.model_dump())
+    # Anonymous registration still works; signing in ties the company to you.
+    run = agent.create_session(payload.model_dump(), user_id=user.user_id if user else None)
     task = asyncio.create_task(agent.execute(run))
     _TASKS.add(task)
     task.add_done_callback(_TASKS.discard)

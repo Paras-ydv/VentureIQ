@@ -31,6 +31,7 @@ const Submit = lazy(() => import("./pages/Submit"));
 const Register = lazy(() => import("./pages/Register"));
 const Login = lazy(() => import("./pages/Login"));
 const Saved = lazy(() => import("./pages/Saved"));
+const MyCompanies = lazy(() => import("./pages/MyCompanies"));
 const Onboarding = lazy(() => import("./pages/Onboarding"));
 
 function PageFallback() {
@@ -45,6 +46,13 @@ function PageFallback() {
 
 /** Each route fades up on entry. Enter-only: an exit animation would hold the
  *  next page back, which reads as slowness in a data tool. */
+/** Founders have no deal feed of their own; send them to their companies. */
+function RoleHome() {
+  const { user } = useAuth();
+  if (user?.role === "founder") return <Navigate to="/my-companies" replace />;
+  return <Overview />;
+}
+
 /** Investor-only areas. Public browsing stays open to everyone. */
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -108,7 +116,7 @@ export default function App() {
                   }
                 />
                 <Route element={<AppLayout />}>
-                  <Route path="/dashboard" element={<RequireAuth><Overview /></RequireAuth>} />
+                  <Route path="/dashboard" element={<RequireAuth><RoleHome /></RequireAuth>} />
                   <Route path="/discover" element={<Discover />} />
                   <Route path="/startup/:id" element={<StartupDetail />} />
                   <Route path="/feed" element={<RequireAuth><Feed /></RequireAuth>} />
@@ -116,6 +124,7 @@ export default function App() {
                   <Route path="/model" element={<Model />} />
                   <Route path="/register" element={<Register />} />
                   <Route path="/saved" element={<RequireAuth><Saved /></RequireAuth>} />
+                  <Route path="/my-companies" element={<RequireAuth><MyCompanies /></RequireAuth>} />
                   <Route path="/submit" element={<Submit />} />
                   <Route path="/onboarding" element={<RequireAuth><Onboarding /></RequireAuth>} />
                 </Route>

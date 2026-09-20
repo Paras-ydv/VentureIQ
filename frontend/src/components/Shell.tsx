@@ -68,6 +68,17 @@ export function Logo({ size = 28, to = "/" }: { size?: number; to?: string }) {
   );
 }
 
+function useNav(): NavEntry[] {
+  const { user } = useAuth();
+  if (user?.role !== "founder") return NAV;
+  // Founders live in their own companies, not an investor deal feed.
+  return [
+    { to: "/my-companies", label: "My companies", icon: svg(Icon.bookmark), end: true },
+    NAV[1],
+    NAV[5],
+  ];
+}
+
 function NavList({
   items,
   onNavigate,
@@ -122,13 +133,14 @@ function MandateCard() {
 }
 
 function Sidebar() {
+  const nav = useNav();
   return (
     <aside className="fixed inset-y-0 left-0 z-40 hidden w-[240px] flex-col gap-5 border-r border-line bg-surface px-3.5 py-4 lg:flex">
       <div className="px-2 pb-1">
         <Logo />
       </div>
       <nav aria-label="Primary" className="isolate">
-        <NavList items={NAV} group="side" />
+        <NavList items={nav} group="side" />
       </nav>
       <div className="px-3 pt-1">
         <div className="eyebrow">Workspace</div>
@@ -255,7 +267,10 @@ function AccountMenu() {
               </>
             )}
             {user.role === "founder" && (
-              <MenuLink to="/register" onClick={() => setOpen(false)}>Register a startup</MenuLink>
+              <>
+                <MenuLink to="/my-companies" onClick={() => setOpen(false)}>My companies</MenuLink>
+                <MenuLink to="/register" onClick={() => setOpen(false)}>Register a company</MenuLink>
+              </>
             )}
             <button
               role="menuitem"
@@ -289,6 +304,7 @@ function MenuLink({ to, children, onClick }: { to: string; children: ReactNode; 
 }
 
 function MobileDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const nav = useNav();
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-[60] lg:hidden">
@@ -308,7 +324,7 @@ function MobileDrawer({ open, onClose }: { open: boolean; onClose: () => void })
           </button>
         </div>
         <nav aria-label="Primary" className="isolate">
-          <NavList items={NAV} onNavigate={onClose} group="drawer" />
+          <NavList items={nav} onNavigate={onClose} group="drawer" />
         </nav>
         <nav aria-label="Secondary" className="isolate border-t border-line pt-4">
           <NavList items={NAV_SECONDARY} onNavigate={onClose} group="drawer" />

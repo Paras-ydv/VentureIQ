@@ -36,10 +36,11 @@ export default function Login() {
     setBusy(true);
     setError(null);
     try {
+      let user;
       if (mode === "signin") {
-        await signIn(f.email, f.password);
+        user = await signIn(f.email, f.password);
       } else {
-        await signUp({
+        user = await signUp({
           email: f.email,
           password: f.password,
           name: f.name,
@@ -48,7 +49,9 @@ export default function Login() {
           firm_name: role === "investor" ? f.firm_name || null : null,
         });
       }
-      navigate(role === "founder" && mode === "signup" ? "/register" : next, { replace: true });
+      // Founders go to their companies; investors to wherever they were headed.
+      const landing = user.role === "founder" ? (mode === "signup" ? "/register" : "/my-companies") : next;
+      navigate(landing, { replace: true });
     } catch (err) {
       setError((err as Error).message);
       setBusy(false);

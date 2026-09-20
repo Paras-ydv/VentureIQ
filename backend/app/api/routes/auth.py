@@ -255,6 +255,43 @@ def remove_watchlist(startup_id: str, db: Session = Depends(get_db), user: User 
         db.commit()
 
 
+@router.get("/me/startups")
+def my_startups(db: Session = Depends(get_db), user: User = Depends(current_user)):
+    """Companies this account registered, newest first."""
+    rows = (
+        db.query(Startup)
+        .options(selectinload(Startup.scores), selectinload(Startup.fraud_signals))
+        .filter(Startup.owner_user_id == user.user_id)
+        .order_by(Startup.created_at.desc())
+        .all()
+    )
+    out = []
+    for s in rows:
+        score = s.latest_score
+        open_flags = [f for f in s.fraud_signals if not f.reviewed_by_human]
+        out.append({
+            "startup_id": s.startup_id,
+            "legal_name": s.legal_name,
+            "sector": s.sector,
+            "stage": s.stage,
+            "hq_city": s.hq_city,
+            "website": s.website,
+            "cin": s.cin,
+            "verified": s.verified,
+            "created_at": s.created_at,
+            "composite_score": score.composite_score if score else None,
+            "growth_potential_score": score.growth_potential_score if score else None,
+            "risk_level_score": score.risk_level_score if score else None,
+            "fraud_likelihood_score": score.fraud_likelihood_score if score else None,
+            "founder_credibility_score": score.founder_credibility_score if score else None,
+            "confidence": score.confidence if score else None,
+            "scored_at": score.computed_at if score else None,
+            "open_flags": len(open_flags),
+            "top_flag": open_flags[0].explanation if open_flags else None,
+        })
+    return out
+
+
 @router.put("/me/mandate")
 def set_mandate(payload: dict[str, Any], db: Session = Depends(get_db), user: User = Depends(current_user)):
     """Create or replace the signed-in investor's mandate."""

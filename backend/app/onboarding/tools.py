@@ -124,6 +124,13 @@ TOOLS: dict[str, dict[str, str]] = {
                "and current company with what was claimed.",
         "consent": "Third-party aggregator; needs VIQ_RAPIDAPI_KEY. Off when unset.",
     },
+    "document": {
+        "label": "Your documents", "kind": "network",
+        "what": "CIN, GSTIN, registered name, incorporation date and revenue read off what you upload.",
+        "how": "Tesseract OCR (or the PDF's own text layer), then the CIN is looked up in the MCA "
+               "registry and the GSTIN check digit is validated.",
+        "consent": "Only what you choose to upload.",
+    },
     "github_user": {
         "label": "GitHub (founder)", "kind": "network",
         "what": "Whether a founder's GitHub handle exists and looks like them.",
