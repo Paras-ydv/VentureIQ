@@ -98,6 +98,14 @@ def _token_for(user: User) -> dict[str, Any]:
     }
 
 
+@router.get("/providers")
+def providers():
+    """Which sign-in methods this deployment offers."""
+    from app.api.routes.oauth import configured as google_configured
+
+    return {"password": True, "google": google_configured()}
+
+
 @router.post("/register", status_code=201)
 def register(payload: RegisterIn, db: Session = Depends(get_db)):
     if db.query(User).filter(User.email == payload.email).first():

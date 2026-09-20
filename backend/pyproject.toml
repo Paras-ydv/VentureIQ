@@ -24,3 +24,13 @@ dependencies = [
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+
+[dependency-groups]
+dev = ["pytest>=8.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "network: needs internet (live lookups)",
+    "registry: needs backend/registry.db (run scripts/import_mca_registry.py)",
+]

@@ -13,7 +13,9 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 
-from app.api.routes import analytics, auth, documents, investors, onboarding, registry, startups
+from app.api.routes import (
+    analytics, auth, documents, investors, oauth, onboarding, registry, startups,
+)
 from app.core.config import settings
 from app.core.database import Base, engine, ensure_columns
 
@@ -56,6 +58,7 @@ async def timing(request: Request, call_next):
 
 
 app.include_router(auth.router)
+app.include_router(oauth.router)
 app.include_router(startups.router)
 app.include_router(investors.router)
 app.include_router(investors.events_router)

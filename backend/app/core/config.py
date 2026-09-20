@@ -44,6 +44,12 @@ class Settings(BaseSettings):
     # Auth. Set VIQ_JWT_SECRET in deployment; locally a secret is generated
     # into backend/artifacts/ on first use so logins survive restarts.
     jwt_secret: str | None = None
+    # Google sign-in. The redirect URI must match the one registered in the
+    # Google Cloud console exactly, including the scheme and port.
+    google_client_id: str | None = None
+    google_client_secret: str | None = None
+    google_redirect_uri: str = "http://localhost:8000/api/auth/google/callback"
+    frontend_url: str = "http://localhost:5173"
     jwt_expire_minutes: int = 60 * 24 * 7
     # The MCA registry lives in its own file so scripts/bootstrap.py (which
     # rebuilds the main database) never wipes a multi-lakh import.

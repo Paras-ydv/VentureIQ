@@ -536,6 +536,10 @@ export const api = {
       body: JSON.stringify({ email, password }),
     }),
   me: () => request<AuthUser>("/auth/me"),
+  authProviders: () => request<{ password: boolean; google: boolean }>("/auth/providers"),
+  /** Full-page redirect: Google needs a real navigation, not fetch. */
+  googleSignInUrl: (role: "investor" | "founder", next: string) =>
+    `${BASE}/auth/google/start?role=${role}&next=${encodeURIComponent(next)}`,
   updateMe: (body: { name?: string; current_password?: string; new_password?: string }) =>
     request<AuthUser>("/auth/me", { method: "PATCH", body: JSON.stringify(body) }),
   setMandate: (body: unknown) =>

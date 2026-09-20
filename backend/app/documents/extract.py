@@ -98,7 +98,9 @@ MONTH_DATE_RE = re.compile(
     r"october|november|december)\,?\s+(\d{4})\b", re.I)
 MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august",
           "september", "october", "november", "december"]
-AMOUNT_RE = r"(?:rs\.?|inr|₹|\$)?\s*([\d][\d,]{2,}(?:\.\d{1,2})?)\s*(crore|cr|lakh|lakhs|million|mn|bn)?"
+# "2.5 crore", "Rs 25,00,000", "$1.2M". A bare small number is ignored unless a
+# unit follows it, so stray page numbers are not read as revenue.
+AMOUNT_RE = r"(?:rs\.?|inr|₹|\$)?\s*([\d][\d,]*(?:\.\d{1,2})?)\s*(crore|cr\b|lakh|lakhs|million|mn\b|bn\b|k\b)?"
 
 
 @dataclass
@@ -133,8 +135,8 @@ def _line_for(text: str, needle: str) -> str:
 
 def _to_number(raw: str, unit: str | None) -> float:
     n = float(raw.replace(",", ""))
-    scale = {"crore": 1e7, "cr": 1e7, "lakh": 1e5, "lakhs": 1e5,
-             "million": 1e6, "mn": 1e6, "bn": 1e9}.get((unit or "").lower(), 1)
+    scale = {"crore": 1e7, "cr": 1e7, "lakh": 1e5, "lakhs": 1e5, "million": 1e6,
+             "mn": 1e6, "bn": 1e9, "k": 1e3}.get((unit or "").strip().lower(), 1)
     return n * scale
 
 
@@ -248,12 +250,17 @@ def extract(text: str, doc_type: str) -> list[Field]:
                 low = line.lower()
                 if not any(k in low for k in keywords):
                     continue
-                m = re.search(AMOUNT_RE, low)
-                if m:
+                for m in re.finditer(AMOUNT_RE, low):
+                    digits = m.group(1).replace(",", "").split(".")[0]
+                    if not m.group(2) and len(digits) < 4:
+                        continue  # too small to be a reported figure without a unit
                     fields.append(Field(key, _to_number(m.group(1), m.group(2)), 0.65,
                                         re.sub(r"\s+", " ", line).strip()[:200],
                                         "read from the document; units can be misread"))
                     break
+                else:
+                    continue
+                break
 
     return fields
 

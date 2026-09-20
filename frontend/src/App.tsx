@@ -30,6 +30,7 @@ const Model = lazy(() => import("./pages/Model"));
 const Submit = lazy(() => import("./pages/Submit"));
 const Register = lazy(() => import("./pages/Register"));
 const Login = lazy(() => import("./pages/Login"));
+const AuthCallback = lazy(() => import("./pages/AuthCallback"));
 const Saved = lazy(() => import("./pages/Saved"));
 const MyCompanies = lazy(() => import("./pages/MyCompanies"));
 const Onboarding = lazy(() => import("./pages/Onboarding"));
@@ -129,6 +130,7 @@ export default function App() {
                   <Route path="/onboarding" element={<RequireAuth><Onboarding /></RequireAuth>} />
                 </Route>
                 <Route path="/login" element={<Login />} />
+                <Route path="/auth/callback" element={<AuthCallback />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
               </InvestorProvider>
