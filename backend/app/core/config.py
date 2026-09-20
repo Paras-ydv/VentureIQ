@@ -30,6 +30,12 @@ class Settings(BaseSettings):
     # Without one the public sample key is used: 10 records per call, enough
     # for single-CIN lookups but not for the bulk registry import.
     data_gov_in_key: str | None = None
+    # RapidAPI key for founder LinkedIn profiles. Without it the LinkedIn
+    # adapter stays mocked; see app/enrichment/linkedin.py for provenance.
+    rapidapi_key: str | None = None
+    linkedin_api_host: str = "linkedin-scraper27.p.rapidapi.com"
+    linkedin_api_path: str = "/profile_details"
+    linkedin_api_param: str = "username"
     # The MCA registry lives in its own file so scripts/bootstrap.py (which
     # rebuilds the main database) never wipes a multi-lakh import.
     registry_db_path: str = str(BACKEND_DIR / "registry.db")

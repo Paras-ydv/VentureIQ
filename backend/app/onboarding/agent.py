@@ -487,18 +487,34 @@ def set_founders(run: Run, founders: list[dict]) -> None:
 
 
 async def check_founder(run: Run, index: int) -> dict:
-    from app.onboarding.tools import github_user
+    """Check one founder against the public profiles they claim."""
+    from app.onboarding.tools import github_user, linkedin_user
 
     founders = run.facts.get("founders", [])
     f = founders[index]
-    if not f.get("github"):
-        f["check"] = {"status": "claimed", "note": "No GitHub handle to check", "kind": "network"}
-    else:
+    company = run.value("legal_name")
+    checks: list[dict] = []
+
+    if f.get("github"):
         try:
-            res = await github_user(f["github"], f["name"], run.value("legal_name"))
+            res = await github_user(f["github"], f["name"], company)
         except httpx.HTTPError as exc:
             res = {"status": "claimed", "note": f"GitHub unreachable: {exc}"}
-        f["check"] = {**res, "kind": "network", "source": "github_user"}
+        checks.append({**res, "label": "GitHub", "kind": "network", "source": "github_user"})
+
+    if f.get("linkedin"):
+        res = await linkedin_user(f["linkedin"], f["name"], company)
+        checks.append({**res, "label": "LinkedIn", "kind": "network", "source": "linkedin_profile"})
+
+    if not checks:
+        checks.append({"status": "claimed", "label": "Profiles",
+                       "note": "Add a GitHub handle or LinkedIn URL to check this founder",
+                       "kind": "network"})
+
+    f["checks"] = checks
+    # Worst status wins for the summary badge.
+    order = {"conflict": 0, "claimed": 1, "verified": 2}
+    f["check"] = sorted(checks, key=lambda c: order.get(c["status"], 1))[0]
     run.save()
     return f
 

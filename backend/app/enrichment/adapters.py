@@ -10,7 +10,8 @@ Which sources are real, and why:
   github   REAL   public REST API, no consent flow needed for public data
   mca21    MOCK   per-company and fee-gated; no bulk access exists
   gstn     MOCK   requires the taxpayer's per-pull consent (account aggregator)
-  linkedin MOCK   scraping breaks ToS; needs OAuth consent or a licensed partner
+  linkedin REAL*  third-party RapidAPI aggregator when VIQ_RAPIDAPI_KEY is set,
+                  otherwise mocked; see app/enrichment/linkedin.py
   whois    REAL   RDAP (WHOIS's successor): registration date and registrar only
 
 See data/raw/README.md for the full constraint write-up. The mock adapters
@@ -180,11 +181,12 @@ class GSTNAdapter(SourceAdapter):
 
 
 class LinkedInAdapter(SourceAdapter):
-    """Founder employment history and endorsements.
+    """Founder employment history.
 
-    Scraping LinkedIn violates its ToS (and is the subject of hiQ v. LinkedIn).
-    Lawful paths are a consented OAuth flow or a licensed data partner. Mocked
-    until one of those exists.
+    Real when VIQ_RAPIDAPI_KEY is set: profiles come from a third-party
+    aggregator (see app/enrichment/linkedin.py for what that means for
+    provenance). Without a key, or for founders with no profile link, the
+    deterministic mock below stands in and is labelled as such.
     """
 
     name = "linkedin"
@@ -193,9 +195,28 @@ class LinkedInAdapter(SourceAdapter):
         return bool(startup.founders)
 
     async def fetch(self, startup: Any, **kwargs: Any) -> dict[str, Any]:
+        from app.enrichment import linkedin as li
+
+        if li.enabled():
+            fetched: dict[str, Any] = {}
+            for founder in startup.founders:
+                handle = li.handle_from(founder.linkedin_url)
+                if not handle:
+                    continue
+                try:
+                    raw = await li.fetch_profile(handle)
+                    profile = li.parse_profile(raw)
+                    profile["match"] = li.matches(profile, founder.name, startup.legal_name)
+                    profile["handle"] = handle
+                    fetched[founder.name] = profile
+                except httpx.HTTPError as exc:
+                    fetched[founder.name] = {"handle": handle, "error": str(exc)}
+            if fetched:
+                return {"_provenance": li.PROVENANCE, "source": "rapidapi", "founders": fetched}
+
         out: dict[str, Any] = {
             "_mock": True,
-            "_why_mock": "LinkedIn scraping breaks ToS; needs OAuth consent or licensed partner",
+            "_why_mock": "No LinkedIn profile link or no VIQ_RAPIDAPI_KEY; using a stand-in",
             "founders": {},
         }
         for founder in startup.founders:

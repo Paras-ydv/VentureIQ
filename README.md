@@ -43,6 +43,9 @@ Copy `backend/.env.example` to `backend/.env` and fill in what you have:
 
 - `VIQ_GITHUB_TOKEN` — fine-grained token with *Public repositories (read-only)*;
   raises GitHub's limit from 60 to 5,000 requests/hour.
+- `VIQ_RAPIDAPI_KEY` — RapidAPI key subscribed to `linkedin-scraper27`, for
+  founder LinkedIn profiles. Check it with
+  `python scripts/check_linkedin.py <profile-url>`.
 - `VIQ_DATA_GOV_IN_KEY` — free key from data.gov.in, needed to import the MCA
   company registry (36.7 lakh companies):
 
@@ -115,7 +118,8 @@ its "couldn't load" state — nothing is hard-coded.
 | Investor matching | **Real** | Blends stated mandate, behavioural events, co-investment network position, and company quality |
 | GitHub / WHOIS enrichment | **Real** | Live public GitHub REST API per founder and org; domain age via RDAP |
 | India company registry | **Real** | MCA Company Master Data (36.7 lakh companies, data.gov.in open data): searchable in Discover, claimable, and used to verify CIN, registered name and incorporation date at registration |
-| GSTN / LinkedIn enrichment, MCA21 on the profile "Run agent" button | **Mocked** | Deterministic fixtures behind the same interface — these sources are fee-gated, consent-gated, or ToS-blocked. See `data/raw/README.md` |
+| Founder LinkedIn profiles | **Real, opt-in** | Third-party RapidAPI aggregator behind `VIQ_RAPIDAPI_KEY`; checks that a founder's profile exists, is theirs, and lists this company. Mocked when the key is unset |
+| GSTN enrichment, MCA21 on the profile "Run agent" button | **Mocked** | Deterministic fixtures behind the same interface — these sources are fee-gated, consent-gated, or ToS-blocked. See `data/raw/README.md` |
 | Marketplace escrow / settlement | **Simulated** | Regulated activity requiring SEBI/RBI licences. See `docs/BUILD_PLAN.md` Problem 1 |
 
 Provenance is visible in the UI: every enrichment row carries a dot marking

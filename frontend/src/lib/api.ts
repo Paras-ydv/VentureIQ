@@ -251,7 +251,8 @@ export interface OnboardFounder {
   github: string | null;
   linkedin: string | null;
   source: "founder" | "website";
-  check: { status: FieldStatus; note: string } | null;
+  check: { status: FieldStatus; note: string; label?: string } | null;
+  checks?: { status: FieldStatus; note: string; label: string }[];
 }
 
 export interface OnboardSnapshot {

@@ -93,14 +93,25 @@ def _apply_to_founders(db: Session, startup: Startup, source: str, payload: dict
     if source == "linkedin":
         for founder in startup.founders:
             data = people.get(founder.name)
-            if not data:
+            if not data or data.get("error"):
                 continue
-            founder.prior_exits = data.get("prior_exits")
-            founder.domain_experience_years = data.get("domain_experience_years")
-            founder.linkedin_endorsement_count = data.get("endorsement_count")
-            founder.linkedin_employment_history = {
-                "roles": data.get("employment_history", [])
-            }
+            if data.get("_provenance") or data.get("positions") is not None:
+                # Real profile: a profile has no structured "exit" field, so
+                # prior exits stay unknown unless the founder wrote it up.
+                founder.prior_exits = data.get("self_reported_exits")
+                founder.domain_experience_years = data.get("domain_experience_years")
+                founder.linkedin_endorsement_count = data.get("connections")
+                founder.linkedin_employment_history = {
+                    "roles": data.get("positions", []),
+                    "education": data.get("education", []),
+                    "headline": data.get("headline"),
+                    "source": "rapidapi",
+                }
+            else:
+                founder.prior_exits = data.get("prior_exits")
+                founder.domain_experience_years = data.get("domain_experience_years")
+                founder.linkedin_endorsement_count = data.get("endorsement_count")
+                founder.linkedin_employment_history = {"roles": data.get("employment_history", [])}
 
     elif source == "github":
         for founder in startup.founders:
@@ -161,7 +172,7 @@ async def enrich_startup(db: Session, startup: Startup, force: bool = False) -> 
             EnrichmentRecord(
                 startup_id=startup.startup_id,
                 source=source,
-                is_mock=adapter.is_mock,
+                is_mock=bool(payload.get("_mock", adapter.is_mock)) if payload else adapter.is_mock,
                 query_params={"legal_name": startup.legal_name},
                 raw_response=payload,
                 status=status,

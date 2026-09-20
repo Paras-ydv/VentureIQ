@@ -1042,7 +1042,7 @@ function Founders({
         <div>
           <h2 className="text-[17px] font-bold">Founders {needed && <span className="text-serious">*</span>}</h2>
           <p className="text-[12.5px] text-ink-muted">
-            Names found on your site are pre-filled. Add a GitHub handle and we'll check it live; LinkedIn history is mocked until a consented integration exists.
+            Names found on your site are pre-filled. Add a GitHub handle or LinkedIn URL and we'll check both live: does the profile exist, is it the right person, and does it list this company?
           </p>
         </div>
       </div>
@@ -1054,9 +1054,10 @@ function Founders({
             <div key={i} className="grid grid-cols-1 gap-2 px-5 py-3 sm:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-center">
               <input className="field h-9" aria-label="Founder name" placeholder="Full name" value={f.name ?? ""} onChange={(e) => update(i, "name", e.target.value)} onBlur={() => commit()} />
               <input className="field h-9" aria-label="Role" placeholder="Role" value={f.role ?? ""} onChange={(e) => update(i, "role", e.target.value)} onBlur={() => commit()} />
+              <input className="field h-9 sm:col-span-2" aria-label="LinkedIn profile URL" placeholder="linkedin.com/in/…" value={f.linkedin ?? ""} onChange={(e) => update(i, "linkedin", e.target.value)} onBlur={() => commit()} />
               <div className="flex gap-1.5">
                 <input className="field h-9 min-w-0 flex-1" aria-label="GitHub handle" placeholder="GitHub handle" value={f.github ?? ""} onChange={(e) => update(i, "github", e.target.value)} onBlur={() => commit()} />
-                {orig?.github && orig.github === f.github && (
+                {((orig?.github && orig.github === f.github) || (orig?.linkedin && orig.linkedin === f.linkedin)) && (
                   <button className="btn h-9 px-2.5 text-[12px]" onClick={() => onCheck(i)} disabled={busyKey === `founder-${i}`}>
                     {busyKey === `founder-${i}` ? <Spin /> : "Check"}
                   </button>
@@ -1064,7 +1065,11 @@ function Founders({
               </div>
               <div className="flex items-center justify-end gap-2">
                 {orig?.source === "website" && <Badge tone="brand">From your site</Badge>}
-                {check && <Badge tone={STATUS[check.status].tone}>{STATUS[check.status].label}</Badge>}
+                {(orig?.checks ?? (check ? [{ ...check, label: "Profile" }] : [])).map((c) => (
+                  <Badge key={c.label} tone={STATUS[c.status].tone}>
+                    {c.label}: {STATUS[c.status].label.toLowerCase()}
+                  </Badge>
+                ))}
                 <button
                   className="rounded-md p-1.5 text-ink-muted hover:bg-raised hover:text-critical"
                   aria-label={`Remove ${f.name || "founder"}`}
@@ -1077,7 +1082,11 @@ function Founders({
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" /></svg>
                 </button>
               </div>
-              {check?.note && <div className="text-[12px] text-ink-muted sm:col-span-4">GitHub: {check.note}</div>}
+              {(orig?.checks ?? (check ? [{ ...check, label: "Profile" }] : [])).map((c) => (
+                <div key={c.label} className="text-[12px] text-ink-muted sm:col-span-4">
+                  {c.label}: {c.note}
+                </div>
+              ))}
             </div>
           );
         })}

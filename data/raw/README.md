@@ -47,6 +47,15 @@ company at a time, only for the company being registered:
 | DNS-over-HTTPS ([dns.google](https://developers.google.com/speed/public-dns/docs/doh/json)) | MX records for the website and email domains | Public DNS |
 | GitHub REST API | Org profile, public repos; founder user profiles | Public API, 60 req/h unauthenticated (`VIQ_GITHUB_TOKEN` raises it to 5,000) |
 | data.gov.in MCA master data API | One company by exact CIN or registered name, when it isn't in the local import | Open government data (GODL-India) |
+| RapidAPI `linkedin-scraper27` | One founder's profile: headline, roles, years of experience, education | Paid third-party aggregator of scraped LinkedIn data. Needs `VIQ_RAPIDAPI_KEY`; without it the LinkedIn adapter stays mocked |
+
+On the LinkedIn provider: it is an aggregator, not LinkedIn's own API, so
+records are stored with a `_provenance` note saying so. It is used to
+corroborate a founder's own claim — is this profile the person they say, does it
+list this company — and never to mark a *company* field verified. A profile has
+no structured "exit" field either, so prior exits stay unknown unless the
+founder wrote them into a role description, where they are kept as
+self-reported.
 
 Responses are stored per startup as `enrichment_record` rows on submission.
 

@@ -117,6 +117,13 @@ TOOLS: dict[str, dict[str, str]] = {
                "terms, so this is mocked.",
         "consent": "Needs page-admin authorisation.",
     },
+    "linkedin_profile": {
+        "label": "LinkedIn (founder)", "kind": "network",
+        "what": "A founder's headline, roles, years of experience and education.",
+        "how": "Fetches the profile through a third-party RapidAPI provider and compares the name "
+               "and current company with what was claimed.",
+        "consent": "Third-party aggregator; needs VIQ_RAPIDAPI_KEY. Off when unset.",
+    },
     "github_user": {
         "label": "GitHub (founder)", "kind": "network",
         "what": "Whether a founder's GitHub handle exists and looks like them.",
@@ -652,6 +659,40 @@ async def github_user(handle: str, founder_name: str, company: str | None) -> di
         note += " · lists this company"
     return {"status": status, "note": f"{note} — {'; '.join(bits)}",
             "data": {k: u.get(k) for k in ("login", "name", "company", "public_repos", "followers", "created_at")}}
+
+
+async def linkedin_user(url_or_handle: str, founder_name: str, company: str | None) -> dict:
+    """Founder LinkedIn check, run when a founder adds a profile link."""
+    from app.enrichment import linkedin as li
+
+    handle = li.handle_from(url_or_handle)
+    if not handle:
+        return {"status": "claimed", "note": "That doesn't look like a personal LinkedIn profile URL"}
+    if not li.enabled():
+        return {"status": "claimed", "note": "LinkedIn lookups are off (no VIQ_RAPIDAPI_KEY)"}
+    try:
+        raw = await li.fetch_profile(handle)
+    except httpx.HTTPStatusError as exc:
+        code = exc.response.status_code
+        hint = {401: "key rejected", 403: "not subscribed to this API", 404: "no such profile",
+                429: "rate limit reached"}.get(code, f"HTTP {code}")
+        return {"status": "conflict" if code == 404 else "claimed", "note": f"LinkedIn lookup failed — {hint}"}
+    except (httpx.HTTPError, ValueError) as exc:
+        return {"status": "claimed", "note": f"LinkedIn unreachable: {type(exc).__name__}"}
+
+    profile = li.parse_profile(raw)
+    if not profile.get("profile_complete"):
+        return {"status": "claimed", "note": "Profile fetched but it carries no usable detail",
+                "data": profile}
+    m = li.matches(profile, founder_name, company)
+    status = "verified" if m["name_matches"] and m["company_matches"] else (
+        "claimed" if m["name_matches"] else "conflict")
+    note = m["summary"]
+    if not m["name_matches"]:
+        note = f"Profile name is “{profile.get('name')}”, not “{founder_name}” — {note}"
+    elif not m["company_matches"]:
+        note = f"{note} — but this company isn't listed on the profile"
+    return {"status": status, "note": note, "data": profile}
 
 
 # --------------------------------------------------------------------------
