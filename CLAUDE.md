@@ -31,17 +31,39 @@ quick start and a table of exactly what is real vs. mocked vs. simulated. Run
   `VIQ_DATABASE_URL` for Postgres). `scripts/bootstrap.py` rebuilds the DB, loads
   the real seed datasets, trains both models, and scores all 9,287 startups in
   ~80 seconds. It is idempotent — re-run it freely.
-- `frontend/` — Vite + React 19 + TypeScript + Tailwind v4. Eight pages: Overview,
-  Discover, StartupDetail, Feed, Alerts, Model, Submit, Onboarding. Charts are
-  hand-built SVG (no chart library) so the palette and interaction stay controlled.
+- `frontend/` — Vite + React 19 + TypeScript + Tailwind v4, light and dark themes.
+  Public pages: Landing, Discover, StartupDetail, Model, Marketplace, Register (the
+  agentic registration), Login. Signed-in pages: Overview, Feed, Saved, Alerts,
+  Onboarding (mandate), MyCompanies, Account (profile + KYC). Charts are hand-built
+  SVG; the 3D scenes are three.js/react-three-fiber, lazy-loaded.
+- `backend/tests/` — pytest, 99 tests (`pytest -m "not network"` for the offline 89).
 - The growth model is genuinely trained, not stubbed: gradient boosting on 1,896
   labelled YC companies, **AUROC 0.741** on a held-out split, beating logistic
   regression (0.721) and random forest (0.732). Metrics are exposed in the UI at
   `/model` on purpose — a product that tells investors to distrust unverified
   claims has to publish its own numbers too.
-- GitHub enrichment calls the real public API. MCA21, GSTN, LinkedIn and WHOIS
-  are deterministic mocks behind the same `SourceAdapter` interface, always
-  flagged `is_mock=True` and surfaced with a provenance dot in the UI.
+- Enrichment, source by source (all behind the same `SourceAdapter` interface, with
+  every record's provenance stored and shown in the UI):
+  - **Real:** company websites, RDAP (domain age), DNS, GitHub (orgs and founders),
+    the MCA Company Master Data (36.7 lakh companies imported from data.gov.in into
+    `backend/registry.db`), GST taxpayer register (identity and status, via a
+    RapidAPI vendor), and founder LinkedIn profiles (via a RapidAPI aggregator —
+    third-party scraped data, labelled as such and used only to corroborate a
+    founder's own claim).
+  - **Simulated, and labelled:** GST turnover (needs per-pull taxpayer consent), the
+    identity decision in KYC (needs a licensed provider; a human reviewer stands in),
+    and the marketplace's money movement (escrow is a state machine).
+- Agentic registration (`app/onboarding/`): a founder gives a website, email, name
+  and stage; the agent plans which sources to query from what it finds, streams its
+  trace, and reconciles everything into a per-field ledger (verified / auto-filled /
+  your input / conflict). Only an independent source can mark a field verified.
+- Documents (`app/documents/`): Tesseract OCR on uploaded certificates and
+  statements; the CIN is checked against the MCA registry, the GSTIN's check digit
+  validated. OCR repairs are accepted only when a check digit or the registry agrees.
+- Accounts: email + password (bcrypt, JWT) and Google OAuth; investor and founder
+  roles with ownership enforced server-side; KYC gates the marketplace.
+- Paid API budgets: LinkedIn and GST lookups are cached in `backend/cache.db` and
+  capped per month, so repeat lookups never spend quota.
 
 Below is the original design documentation, still current.
 - `VentureIQ_report (2).pdf` — the dissertation synopsis (30 pages). Contains the
@@ -123,12 +145,18 @@ above is what Phase 1 code should actually target.
 - **Don't add code that pretends the marketplace layer moves real money.** Escrow/KYC/
   RoFR should be built as a clearly-labeled simulation unless the team has confirmed a
   licensed payment/escrow partner — see `docs/BUILD_PLAN.md` Problem 1.
-- **Don't bulk-scrape LinkedIn, Crunchbase, or GSTN.** These are ToS/consent-gated by
-  design (`data/raw/README.md`); enrichment adapters for these sources should be built
-  against mocked fixtures until there's a real licensed/consented integration path.
-  GitHub (public API) and MCA21 (per-company, fee-aware) are fine to integrate for
-  real, one company at a time, with caching (30-day TTL, 5 retries with exponential
-  backoff, per report §8.1.3).
+- **Never bulk-scrape LinkedIn, Crunchbase or GSTN.** Lookups are one company or
+  founder at a time, cached, and budgeted. LinkedIn comes through a paid aggregator
+  the team chose deliberately; keep its records labelled as third-party and use them
+  only to corroborate a founder's own claim, never to verify a company field.
+  GST returns and exact turnover stay simulated until there is a consented GSP flow.
+  GitHub, RDAP, DNS, the MCA master data and the public GST register are fine to call
+  for real, with caching (30-day TTL, retries with backoff, per report §8.1.3).
+- **Only independent evidence verifies.** In the onboarding ledger, mocked or locally
+  computed evidence can support a value but must never mark it verified. Keep that
+  rule when adding sources (`app/onboarding/ledger.py`).
+- **Keep secrets out of git.** `backend/.env`, `registry.db`, `cache.db`,
+  `artifacts/jwt_secret.txt` and `artifacts/uploads/` are gitignored; keep it so.
 - **Keep the four AI Engine scores independent.** Don't refactor them into one joint
   model without re-reading why the report deliberately keeps them separate (§8.3).
 - **Any new data source or dataset** should get a row added to `data/raw/README.md`
