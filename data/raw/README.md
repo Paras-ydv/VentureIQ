@@ -47,6 +47,7 @@ company at a time, only for the company being registered:
 | DNS-over-HTTPS ([dns.google](https://developers.google.com/speed/public-dns/docs/doh/json)) | MX records for the website and email domains | Public DNS |
 | GitHub REST API | Org profile, public repos; founder user profiles | Public API, 60 req/h unauthenticated (`VIQ_GITHUB_TOKEN` raises it to 5,000) |
 | data.gov.in MCA master data API | One company by exact CIN or registered name, when it isn't in the local import | Open government data (GODL-India) |
+| RapidAPI `gst-return-status` | One GSTIN: legal name, status, registration date, constitution, state, PAN | Public GST taxpayer register, resold by jamku.app. Free tier 20/min, 1,000/day; it withholds turnover band and filing history ("Available in Paid Version"), which are then reported as unavailable, never shown |
 | RapidAPI `linkedin-scraper27` | One founder's profile: headline, roles, years of experience, education | Paid third-party aggregator of scraped LinkedIn data. Needs `VIQ_RAPIDAPI_KEY`; without it the LinkedIn adapter stays mocked |
 
 On the LinkedIn provider: it is an aggregator, not LinkedIn's own API, so

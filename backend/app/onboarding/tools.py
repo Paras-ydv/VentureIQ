@@ -866,7 +866,13 @@ async def gstn(ctx: Run, args: dict) -> dict:
         if not profile["active"]:
             ctx.think(f"The GST register lists this GSTIN as “{profile['status']}”, not Active.")
         ctx.facts["gst_profile"] = profile
-        # Turnover is not public; the consented pull is still simulated.
+        if profile.get("turnover_min_inr") or profile.get("turnover_max_inr"):
+            ctx.facts["gst_turnover_band_inr"] = [profile.get("turnover_min_inr"),
+                                                  profile.get("turnover_max_inr")]
+        elif profile.get("turnover_withheld"):
+            ctx.think("The GST register has a turnover band, but this API tier withholds it; "
+                      "revenue reconciliation stays simulated.")
+        # Exact turnover is private; the consented pull is still simulated.
         rng = _seed_for("onboard-gstn", gstin)
         return {"summary": f"{profile['legal_name'].title()} — {profile['status']}"
                            f"{', registered ' + profile['registration_date'] if profile['registration_date'] else ''}",

@@ -138,7 +138,8 @@ its "couldn't load" state — nothing is hard-coded.
 | GitHub / WHOIS enrichment | **Real** | Live public GitHub REST API per founder and org; domain age via RDAP |
 | India company registry | **Real** | MCA Company Master Data (36.7 lakh companies, data.gov.in open data): searchable in Discover, claimable, and used to verify CIN, registered name and incorporation date at registration |
 | Founder LinkedIn profiles | **Real, opt-in** | Third-party RapidAPI aggregator behind `VIQ_RAPIDAPI_KEY`; checks that a founder's profile exists, is theirs, and lists this company. Mocked when the key is unset |
-| GSTN enrichment, MCA21 on the profile "Run agent" button | **Mocked** | Deterministic fixtures behind the same interface — these sources are fee-gated, consent-gated, or ToS-blocked. See `data/raw/README.md` |
+| GST register | **Real** | Legal name, status, registration date and state for a GSTIN, via RapidAPI `gst-return-status`. Turnover and filing history need the vendor's paid tier; exact turnover needs taxpayer consent, so revenue reconciliation stays simulated |
+| MCA21 on the profile "Run agent" button | **Real** | Uses the imported MCA master data (or a live CIN lookup) | Deterministic fixtures behind the same interface — these sources are fee-gated, consent-gated, or ToS-blocked. See `data/raw/README.md` |
 | Marketplace escrow / settlement | **Simulated** | Regulated activity requiring SEBI/RBI licences. See `docs/BUILD_PLAN.md` Problem 1 |
 
 Provenance is visible in the UI: every enrichment row carries a dot marking

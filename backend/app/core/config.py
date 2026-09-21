@@ -38,8 +38,10 @@ class Settings(BaseSettings):
     linkedin_api_param: str = "username"
     # GST taxpayer search vendor (optional). Public register data only; returns
     # and turnover stay consent-gated and mocked.
+    # A GST vendor can have its own key; otherwise the shared RapidAPI key is used.
+    gst_return_status_api_key: str | None = None
     gst_api_host: str | None = None
-    gst_api_path: str = "/gstin/{gstin}"
+    gst_api_path: str = "/free/gstin/{gstin}"
     gst_api_param: str | None = None
     # Paid quota: cache profiles hard, and stop before the monthly cap.
     cache_db_path: str = str(BACKEND_DIR / "cache.db")
