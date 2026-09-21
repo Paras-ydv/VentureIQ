@@ -9,6 +9,9 @@ backend/registry.db*
 backend/cache.db*
 backend/artifacts/*.joblib
 backend/artifacts/*.json
+# Signing key and anything people upload (ID documents, certificates).
+backend/artifacts/jwt_secret.txt
+backend/artifacts/uploads/
 
 # Node
 frontend/node_modules/
