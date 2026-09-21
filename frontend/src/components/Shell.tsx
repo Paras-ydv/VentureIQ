@@ -26,6 +26,12 @@ const Icon = {
   ),
   model: <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />,
   bookmark: <path d="M6 4h12v16l-6-4-6 4V4z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />,
+  market: (
+    <>
+      <path d="M4 9h16l-1.2 10a2 2 0 01-2 1.8H7.2a2 2 0 01-2-1.8L4 9z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+      <path d="M9 9V6a3 3 0 016 0v3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </>
+  ),
   plus: <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />,
   user: (
     <>
@@ -47,6 +53,7 @@ const NAV: NavEntry[] = [
   { to: "/feed", label: "My feed", icon: svg(Icon.feed) },
   { to: "/saved", label: "Saved", icon: svg(Icon.bookmark) },
   { to: "/alerts", label: "Alerts", icon: svg(Icon.alert) },
+  { to: "/marketplace", label: "Marketplace", icon: svg(Icon.market) },
   { to: "/model", label: "Model", icon: svg(Icon.model) },
 ];
 
@@ -76,6 +83,7 @@ function useNav(): NavEntry[] {
     { to: "/my-companies", label: "My companies", icon: svg(Icon.bookmark), end: true },
     NAV[1],
     NAV[5],
+    NAV[6],
   ];
 }
 
@@ -272,6 +280,7 @@ function AccountMenu() {
                 <MenuLink to="/register" onClick={() => setOpen(false)}>Register a company</MenuLink>
               </>
             )}
+            <MenuLink to="/account" onClick={() => setOpen(false)}>Account &amp; KYC</MenuLink>
             <button
               role="menuitem"
               className="flex w-full items-center rounded-lg px-3 py-2 text-left text-[13.5px] font-medium text-ink-secondary transition-colors hover:bg-raised hover:text-ink"

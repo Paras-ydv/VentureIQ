@@ -53,6 +53,8 @@ CREATE TABLE IF NOT EXISTS company (
 );
 CREATE INDEX IF NOT EXISTS company_registered ON company(registered);
 CREATE INDEX IF NOT EXISTS company_state ON company(state);
+-- Prefix search (typeahead) is a range scan over this; see search_local.
+CREATE INDEX IF NOT EXISTS company_name_nocase ON company(name COLLATE NOCASE);
 CREATE VIRTUAL TABLE IF NOT EXISTS company_fts USING fts5(
     name, content='company', content_rowid='rowid', tokenize='unicode61'
 );
@@ -201,6 +203,16 @@ def _fts_query(q: str) -> str | None:
     return " ".join(f'"{w}"' for w in words[:-1]) + f' "{words[-1]}"*'
 
 
+def _ensure_prefix_index(conn: sqlite3.Connection) -> None:
+    """A case-insensitive index on the name, so typeahead is a range scan.
+
+    FTS5 has to score every match before it can order them, which is slow once
+    a prefix matches thousands of companies. Prefix queries answer from this
+    index instead, and FTS is kept for word matches inside a name.
+    """
+    conn.execute("CREATE INDEX IF NOT EXISTS company_name_nocase ON company(name COLLATE NOCASE)")
+
+
 def search_local(
     q: str,
     limit: int = 20,
@@ -215,21 +227,45 @@ def search_local(
         conn = connect()
     except FileNotFoundError:
         return []
-    sql = ("SELECT c.*, bm25(company_fts) AS rank FROM company_fts "
-           "JOIN company c ON c.rowid = company_fts.rowid WHERE company_fts MATCH ?")
-    args: list[Any] = [fts]
-    if state:
-        sql += " AND c.state = ?"
-        args.append(state.title())
-    if active_only:
-        sql += " AND c.status = 'Active'"
-    if since:
-        sql += " AND c.registered >= ?"
-        args.append(since)
-    sql += " ORDER BY rank LIMIT ?"
-    args.append(max(limit * 3, 30))
+
+    def filters(sql: str, args: list[Any]) -> tuple[str, list[Any]]:
+        if state:
+            sql += " AND c.state = ?"
+            args.append(state.title())
+        if active_only:
+            sql += " AND c.status = 'Active'"
+        if since:
+            sql += " AND c.registered >= ?"
+            args.append(since)
+        return sql, args
+
+    want = max(limit * 3, 30)
+    rows: list[dict[str, Any]] = []
     try:
-        rows = [_row(r) for r in conn.execute(sql, args).fetchall()]
+        # 1. What the typeahead almost always wants: names starting with the query.
+        _ensure_prefix_index(conn)
+        # No ESCAPE clause: it would stop SQLite using the index for LIKE 'x%',
+        # so wildcards are stripped from the query instead.
+        prefix_sql, prefix_args = filters(
+            "SELECT c.* FROM company c WHERE c.name LIKE ?",
+            [re.sub(r"[%_]", " ", q.strip()) + "%"],
+        )
+        prefix_sql += " LIMIT ?"
+        prefix_args.append(want)
+        rows = [_row(r) for r in conn.execute(prefix_sql, prefix_args).fetchall()]
+
+        # 2. Top up with word matches from anywhere in the name.
+        if len(rows) < want:
+            seen = {r["cin"] for r in rows}
+            fts_sql, fts_args = filters(
+                "SELECT c.*, bm25(company_fts) AS rank FROM company_fts "
+                "JOIN company c ON c.rowid = company_fts.rowid WHERE company_fts MATCH ?",
+                [fts],
+            )
+            fts_sql += " ORDER BY rank LIMIT ?"
+            fts_args.append(want)
+            rows += [r for r in (_row(x) for x in conn.execute(fts_sql, fts_args).fetchall())
+                     if r["cin"] not in seen]
     except sqlite3.OperationalError:
         return []
     finally:

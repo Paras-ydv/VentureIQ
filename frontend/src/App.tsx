@@ -33,6 +33,8 @@ const Login = lazy(() => import("./pages/Login"));
 const AuthCallback = lazy(() => import("./pages/AuthCallback"));
 const Saved = lazy(() => import("./pages/Saved"));
 const MyCompanies = lazy(() => import("./pages/MyCompanies"));
+const Account = lazy(() => import("./pages/Account"));
+const Marketplace = lazy(() => import("./pages/Marketplace"));
 const Onboarding = lazy(() => import("./pages/Onboarding"));
 
 function PageFallback() {
@@ -126,6 +128,8 @@ export default function App() {
                   <Route path="/register" element={<Register />} />
                   <Route path="/saved" element={<RequireAuth><Saved /></RequireAuth>} />
                   <Route path="/my-companies" element={<RequireAuth><MyCompanies /></RequireAuth>} />
+                  <Route path="/account" element={<RequireAuth><Account /></RequireAuth>} />
+                  <Route path="/marketplace" element={<Marketplace />} />
                   <Route path="/submit" element={<Submit />} />
                   <Route path="/onboarding" element={<RequireAuth><Onboarding /></RequireAuth>} />
                 </Route>

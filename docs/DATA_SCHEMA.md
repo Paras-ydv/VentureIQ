@@ -105,6 +105,11 @@ enrichment/verification) · 🧮 derived/computed, never user-entered.
 | `reviewed_by_human` | bool | report §8.1.5 — algorithms flag, humans decide |
 | `run_at` | timestamp | |
 
+### 1.6b `startup_document` (filled by the OCR layer)
+`layoutlm_entities` holds the extracted fields, `deviation_flags` the checks run
+against the MCA registry and the profile, and `extraction_confidence` the OCR
+confidence. See `app/documents/`.
+
 ### 1.7 `onboarding_session` (agentic registration, before a `startup` exists)
 | Field | Type | Notes |
 |---|---|---|
@@ -156,6 +161,28 @@ A `startup` is linked to a registry company by `startup.cin`.
 | `auth_provider`, `provider_subject` | text | seam for Google/LinkedIn OAuth |
 | `investor_id` | FK, nullable | investors own exactly one profile |
 | `is_active`, `created_at`, `last_login_at` | | |
+
+### `kyc_case`
+| Field | Type | Notes |
+|---|---|---|
+| `case_id` | UUID **PK** | |
+| `user_id` | FK | one case per attempt; the newest is authoritative |
+| `investor_id` | FK, nullable | mirrors the decision onto `investor.kyc_status` |
+| `pan`, `legal_name` | text | as submitted |
+| `document_path`, `document_type` | text | the ID document, read by OCR |
+| `checks` | jsonb | each automated check with `passed` / `failed` / `review` |
+| `status` | enum(`submitted`,`passed_checks`,`failed_checks`,`verified`,`rejected`) | only a human moves it to `verified` |
+| `reviewer_note`, `reviewed_by`, `decided_at` | | written to the audit log too |
+
+### `offer` (marketplace — SIMULATED)
+| Field | Type | Notes |
+|---|---|---|
+| `offer_id` | UUID **PK** | |
+| `listing_id`, `investor_id`, `user_id` | FK | |
+| `amount`, `equity_pct`, `message` | | |
+| `status` | enum(`offered`,`rofr_window`,`declined`,`settled_simulated`) | no money moves at any transition |
+| `compliance` | jsonb | every rule evaluated for this offer, with its verdict |
+| `rofr_expires_at` | timestamp | settlement is refused until it passes |
 
 ### `watchlist_item`
 | Field | Type | Notes |

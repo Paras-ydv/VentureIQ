@@ -41,18 +41,22 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
   if (!res.ok) {
     let detail = `${res.status} ${res.statusText}`;
+    let structured: unknown = null;
     try {
       const body = await res.json();
       if (body?.detail) {
-        detail =
-          typeof body.detail === "string"
-            ? body.detail
-            : body.detail.map((d: any) => `${d.loc?.slice(1).join(".")}: ${d.msg}`).join("; ");
+        structured = body.detail;
+        if (typeof body.detail === "string") detail = body.detail;
+        else if (Array.isArray(body.detail))
+          detail = body.detail.map((d: any) => `${d.loc?.slice(1).join(".")}: ${d.msg}`).join("; ");
+        else if (typeof body.detail?.message === "string") detail = body.detail.message;
       }
     } catch {
       /* keep the status line */
     }
-    throw new Error(detail);
+    // Endpoints that answer with structured reasons (compliance, for one) keep
+    // them on the error so callers can render each rule instead of a blob.
+    throw Object.assign(new Error(detail), { detail: structured, status: res.status });
   }
   if (res.status === 204) return undefined as T;
   return res.json();
@@ -398,6 +402,65 @@ export interface StoredDoc {
   checks: DocCheck[];
 }
 
+export interface KycCheck {
+  check: string;
+  status: "passed" | "failed" | "review";
+  detail: string;
+  kind: string;
+}
+
+export interface KycCase {
+  case_id: string;
+  status: "submitted" | "passed_checks" | "failed_checks" | "verified" | "rejected";
+  pan: string | null;
+  legal_name: string | null;
+  document_type: string | null;
+  checks: KycCheck[];
+  reviewer_note: string | null;
+  submitted_at: string;
+  decided_at: string | null;
+  what_this_means: string;
+}
+
+export interface KycStatus {
+  case: KycCase | null;
+  kyc_status: string | null;
+  accredited: boolean;
+  marketplace_unlocked: boolean;
+  note: string;
+}
+
+export interface MarketRule {
+  id: string;
+  rule: string;
+  why: string;
+}
+
+export interface ComplianceVerdict {
+  id: string;
+  passed: boolean;
+  detail: string;
+  rule: string;
+  why: string;
+}
+
+export interface MarketOffer {
+  offer_id: string;
+  listing_id: string;
+  amount: number;
+  equity_pct: number | null;
+  message: string | null;
+  status: string;
+  compliance: { verdicts: ComplianceVerdict[] } | null;
+  rofr_expires_at: string | null;
+  created_at: string;
+  simulated: boolean;
+  startup: { startup_id: string; legal_name: string } | null;
+  ask_amount: number | null;
+  next?: string;
+  settlement?: { simulated: boolean; note: string };
+}
+
 export interface MyStartup {
   startup_id: string;
   legal_name: string;
@@ -545,6 +608,45 @@ export const api = {
   setMandate: (body: unknown) =>
     request<AuthUser>("/auth/me/mandate", { method: "PUT", body: JSON.stringify(body) }),
   myStartups: () => request<MyStartup[]>("/auth/me/startups"),
+  kycStatus: () => request<KycStatus>("/kyc/me"),
+  kycSubmit: async (pan: string, legalName: string, file?: File | null) => {
+    const body = new FormData();
+    body.append("pan", pan);
+    body.append("legal_name", legalName);
+    if (file) body.append("file", file);
+    const token = getToken();
+    const res = await fetch(`${BASE}/kyc/submit`, {
+      method: "POST",
+      body,
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail ?? `${res.status}`);
+    return (await res.json()) as KycCase;
+  },
+  kycQueue: () => request<KycCase[]>("/kyc/queue"),
+  kycDecide: (caseId: string, approve: boolean, note?: string) =>
+    request<KycCase>(`/kyc/${caseId}/decide?approve=${approve}${note ? `&note=${encodeURIComponent(note)}` : ""}`, {
+      method: "POST",
+    }),
+
+  marketRules: () =>
+    request<{ simulated: boolean; disclaimer: string; accredited_threshold_usd: number; rules: MarketRule[] }>(
+      "/marketplace/rules",
+    ),
+  listings: () => request<{ disclaimer: string; items: any[] }>("/marketplace/listings"),
+  createListing: (startupId: string, ask: number, equityPct: number, rofrDays = 7) =>
+    request<any>(
+      `/marketplace/listings?startup_id=${startupId}&ask_amount=${ask}&equity_offered_pct=${equityPct}&rofr_days=${rofrDays}`,
+      { method: "POST" },
+    ),
+  makeOffer: (listingId: string, body: { amount: number; equity_pct?: number | null; message?: string | null }) =>
+    request<MarketOffer>(`/marketplace/listings/${listingId}/offers`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  myOffers: () => request<MarketOffer[]>("/marketplace/offers"),
+  offerAction: (offerId: string, action: "accept" | "decline" | "settle") =>
+    request<MarketOffer>(`/marketplace/offers/${offerId}/${action}`, { method: "POST" }),
   docCapabilities: () =>
     request<{ ocr_available: boolean; detail: string; max_file_mb: number; accepted: string[]; checks: string[] }>(
       "/documents/capabilities",
@@ -625,5 +727,4 @@ export const api = {
     request<{ startup_id: string }>(`/onboarding/sessions/${id}/submit`, { method: "POST" }),
 
   valuation: (id: string) => request<any>(`/marketplace/valuation/${id}`),
-  listings: () => request<{ disclaimer: string; items: any[] }>("/marketplace/listings"),
 };

@@ -37,6 +37,17 @@ time, so re-run it freely. Add `--skip-train` to reuse the existing models, or
 
 API docs are served at http://localhost:8000/docs.
 
+### Tests
+
+```bash
+cd backend
+.venv/bin/python -m pytest                  # everything available on this machine
+.venv/bin/python -m pytest -m "not network" # offline only (89 tests, ~10s)
+```
+
+`network` tests really do fetch websites, RDAP, DNS and GitHub; `registry` tests
+need `backend/registry.db` and skip themselves without it.
+
 ### Optional: keys and the India company registry
 
 Copy `backend/.env.example` to `backend/.env` and fill in what you have:
@@ -111,6 +122,10 @@ its "couldn't load" state — nothing is hard-coded.
 
 | Layer | Status | Notes |
 |---|---|---|
+| Document verification (OCR) | **Real** | Tesseract reads an uploaded certificate or statement; the CIN is looked up in the MCA registry, the GSTIN check digit validated, and revenue compared with the profile. OCR confusions (5↔S, 0↔O) are repaired only when the check digit or the registry then agrees |
+| KYC | **Partly real** | The document is read and the PAN's structure, the name and any SEBI number are checked. Proving identity needs a licensed provider, so automated checks stop at `passed_checks` and a human grants `verified`; every decision is audited |
+| Marketplace | **Simulated, with real compliance** | Listings, offers, right-of-first-refusal and settlement are a state machine — no money moves. The rules (KYC, accreditation threshold, self-dealing, company score) are enforced per offer and returned with reasons |
+| Google sign-in | **Real, opt-in** | OAuth 2.0 authorization-code flow with a signed state; accounts link by email. Needs `VIQ_GOOGLE_CLIENT_ID` / `_SECRET` |
 | Accounts & authorisation | **Real** | Email + password with bcrypt, JWT sessions, investor and founder roles. Feeds, activity, watchlists and event writes are owned by one account and refused to everyone else |
 | Investor watchlist | **Real** | Saved companies with private notes and a pipeline stage; saving also feeds the matcher |
 | Startup registration | **Real** | Agentic: four fields in, the agent researches the rest live (company website, RDAP, DNS, GitHub, corpus, sector classifier, CIN/GSTIN decoding) and every field gets a verified / auto-filled / conflict status. The classic stage-conditional form remains at `/submit` |

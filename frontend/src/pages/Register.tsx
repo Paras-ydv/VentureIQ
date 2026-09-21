@@ -837,15 +837,22 @@ function Editor({
     },
     "aria-label": f.label,
   };
+  // A dropdown commits as soon as you choose: waiting for a blur reads as broken.
   if (f.key === "stage")
     return (
-      <select className="field h-9 w-full max-w-[260px]" value={v} onChange={(e) => setV(e.target.value)} {...common}>
+      <select className="field h-9 w-full max-w-[260px]" value={v} onChange={(e) => onDone(e.target.value)} {...common} onBlur={undefined}>
         {STAGES.map((s) => <option key={s} value={s}>{STAGE_LABEL[s]}</option>)}
       </select>
     );
   if (f.key === "sector")
     return (
-      <select className="field h-9 w-full max-w-[260px]" value={v} onChange={(e) => setV(e.target.value)} {...common}>
+      <select
+        className="field h-9 w-full max-w-[260px]"
+        value={v}
+        onChange={(e) => (e.target.value ? onDone(e.target.value) : setV(""))}
+        {...common}
+        onBlur={undefined}
+      >
         {!v && <option value="">Choose a sector</option>}
         {[...new Set([...(v ? [v] : []), ...sectors])].map((s) => <option key={s}>{s}</option>)}
       </select>
