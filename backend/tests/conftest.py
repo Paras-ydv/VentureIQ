@@ -36,7 +36,11 @@ def _schema():
 
 @pytest.fixture
 def client():
-    return TestClient(app)
+    # As a context manager TestClient keeps one event loop alive for the whole
+    # test. Without it, each request gets a fresh portal and the agent's
+    # background research task is cancelled the moment the request returns.
+    with TestClient(app) as test_client:
+        yield test_client
 
 
 @pytest.fixture

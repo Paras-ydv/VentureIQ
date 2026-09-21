@@ -118,8 +118,12 @@ def snapshot(session_id: str):
 
 
 @router.get("/sessions/{session_id}/events")
-async def events(session_id: str, request: Request):
+async def events(session_id: str, request: Request, replay: bool = False):
     run = _run_or_404(session_id)
+    if replay:
+        # Plain JSON of what has been emitted so far; the stream below is what
+        # browsers use. Handy for tests and for debugging a finished session.
+        return run.events
 
     async def stream():
         sent = 0
