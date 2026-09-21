@@ -288,7 +288,7 @@ function StartForm({
         <div className="eyebrow mb-1">How the agent searches</div>
         <p className="mb-4 text-[13.5px] leading-relaxed text-ink-secondary">
           The agent picks sources based on what it finds — a GitHub link on your site gets confirmed; an
-          Indian address unlocks the MCA21 registry; nothing gated is touched without your consent.
+          Indian address unlocks the MCA company registry; nothing gated is touched without your consent.
         </p>
         {groups.map(([kind, title]) => (
           <div key={kind} className="mb-4 last:mb-0">

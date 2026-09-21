@@ -298,8 +298,8 @@ export default function Login() {
               ))}
             </div>
             <p className="mt-4 text-[11.5px] leading-relaxed text-panel-muted">
-              Browsing companies, scores and the model report stays open to everyone. KYC is recorded here,
-              not performed — a licensed provider would do that before any marketplace activity.
+              Browsing companies, scores and the model report stays open to everyone. KYC checks run here;
+              the identity decision itself needs a licensed provider, so a person reviews it.
             </p>
           </div>
         </m.aside>

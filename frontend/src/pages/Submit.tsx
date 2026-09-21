@@ -264,7 +264,7 @@ export default function Submit() {
               eyebrow="Step 3"
               title="Financials"
               description="Burn rate and cash balance are required from seed onward — runway is derived from them and is the single largest input to your risk score."
-              action={<Badge tone="warning">Cross-checked against GST filings</Badge>}
+              action={<Badge tone="warning">Compared with GST turnover (simulated)</Badge>}
             />
             <div className="grid sm:grid-cols-3 gap-3.5">
               {[

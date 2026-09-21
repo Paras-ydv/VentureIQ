@@ -314,7 +314,6 @@ export default function StartupDetail() {
     fin?.revenue && fin?.gst_reported_revenue
       ? Math.abs(fin.revenue - fin.gst_reported_revenue) / fin.revenue
       : null;
-  const gstMock = s.enrichments.find((e) => e.source === "gstn")?.is_mock ?? true;
 
   return (
     <div className="animate-in space-y-5">
@@ -611,13 +610,15 @@ export default function StartupDetail() {
                     </svg>
                     <div className="text-[13.5px] leading-relaxed" style={{ color: gstGap > 0.2 ? "var(--color-critical-text)" : "var(--color-good-text)" }}>
                       <div className="flex flex-wrap items-center gap-2">
-                        <b>{gstGap > 0.2 ? "Revenue mismatch" : "Revenue corroborated"}</b>
+                        <b>{gstGap > 0.2 ? "Revenue mismatch" : "Revenue within tolerance"}</b>
+                        {/* The GST register lookup can be live, but turnover is never public:
+                            the figure compared here is always simulated. */}
                         <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-ink-secondary">
-                          <ProvenanceDot isMock={gstMock} />
-                          GSTN {gstMock ? "(mocked source)" : "(live)"}
+                          <ProvenanceDot isMock />
+                          GST turnover (simulated)
                         </span>
                       </div>
-                      Founder reports <b className="tnum">{compactUsd(fin.revenue)}</b>; GST filings show{" "}
+                      Founder reports <b className="tnum">{compactUsd(fin.revenue)}</b>; the simulated GST figure is{" "}
                       <b className="tnum">{compactUsd(fin.gst_reported_revenue)}</b> — a{" "}
                       <b className="tnum">{(gstGap * 100).toFixed(0)}%</b> gap
                       {gstGap > 0.2 ? ", above the 20% threshold that triggers a fraud flag." : ", within the 20% tolerance."}

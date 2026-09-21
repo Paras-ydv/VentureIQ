@@ -407,12 +407,14 @@ export default function Landing() {
             <div className="marquee flex w-max gap-14 whitespace-nowrap text-[17px] font-bold tracking-tight text-ink-muted">
               {[0, 1].map((k) => (
                 <div key={k} className="flex gap-14" aria-hidden={k === 1}>
+                  <span>MCA company master data</span>
+                  <span>GST taxpayer register</span>
+                  <span>Company websites</span>
+                  <span>Domain registry (RDAP)</span>
+                  <span>GitHub</span>
+                  <span>Founder LinkedIn profiles</span>
                   <span>Y Combinator directory</span>
                   <span>Indian funding records</span>
-                  <span>GitHub REST API</span>
-                  <span>MCA21 registry</span>
-                  <span>GSTN filings</span>
-                  <span>Founder profiles</span>
                 </div>
               ))}
             </div>
@@ -570,7 +572,7 @@ export default function Landing() {
                           : "border-good-line bg-good-tint text-good-text"
                       }`}
                     >
-                      {gst > 0.2 ? "Revenue mismatch" : "Revenue corroborated"} against GST filings — {(gst * 100).toFixed(0)}% gap.
+                      {gst > 0.2 ? "Revenue mismatch" : "Revenue within tolerance"} vs the GST figure — {(gst * 100).toFixed(0)}% gap (simulated check).
                     </div>
                   )}
                 </div>
@@ -644,8 +646,9 @@ export default function Landing() {
               </FeatureIcon>
               <div className="text-[21px] font-extrabold tracking-tight">Claims, reconciled</div>
               <p className="text-[14.5px] leading-relaxed text-ink-secondary">
-                Founder-reported revenue is checked against GST filings. Over a 20% gap, the profile is
-                flagged — with both numbers shown.
+                Founder-reported revenue is compared with GST-reported turnover. Over a 20% gap, the profile is
+                flagged — with both numbers shown. The turnover figure needs the taxpayer's consent, so
+                it is simulated in this build.
               </p>
               <div className="mt-auto rounded-xl border border-critical-line bg-critical-tint p-3 text-[13px] leading-snug text-critical-text">
                 <b>Why both numbers?</b> A 45% gap means something different on $50K than on $50M.
@@ -907,7 +910,7 @@ export default function Landing() {
                     </div>
                   ))}
                   <div className="rounded-xl border border-good-line bg-good-tint p-2.5 text-[10.5px] leading-snug text-good-text">
-                    Every other company in your sectors passed its checks.
+                    Algorithms raise these flags; a person reviews each one.
                   </div>
                 </div>
               </Phone>
