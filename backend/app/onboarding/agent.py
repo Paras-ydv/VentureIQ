@@ -370,7 +370,14 @@ def _react(run: Run, key: str, tool: str, ok: bool, data: dict, plan: Any, domai
 
 def _maybe_registry(run: Run, plan: Any, name: str | None) -> None:
     """MCA21 only makes sense for Indian entities — decide, and say why."""
-    if "mca21" in run.tool_results or run.facts.get("registry_decided"):
+    if "mca21" in run.tool_results:
+        return
+    # "Not Indian" is a provisional answer, not a final one. The website is
+    # usually read before the corpus answers, and a .tech or .ai domain rarely
+    # says "India" on the homepage --- BharatX, registered in Bengaluru, was
+    # skipped on exactly that basis. So a later source that does establish an
+    # Indian entity reopens the decision.
+    if run.facts.get("registry_decided") and not run.facts.get("india"):
         return
     cin = run.inputs.get("cin")
     cin_ok = cin and checks.decode_cin(cin)["valid"]
@@ -379,8 +386,12 @@ def _maybe_registry(run: Run, plan: Any, name: str | None) -> None:
     if not run.facts.get("india"):
         if "website" in run.tool_results:  # decide once we've seen the site
             run.facts["registry_decided"] = True
-            run.think("Nothing suggests an Indian entity, so the MCA21 and GST registries are skipped.")
+            run.think("Nothing so far suggests an Indian entity, so the MCA21 and GST registries "
+                      "are skipped for now.")
         return
+    if run.facts.get("registry_decided") and not run.facts.get("registry_reopened"):
+        run.facts["registry_reopened"] = True
+        run.think("A later source places this company in India after all — checking the MCA registry.")
     if not (cin_ok or name):
         return
     run.facts["registry_decided"] = True

@@ -71,7 +71,18 @@ FIELDS: list[FieldSpec] = [
     FieldSpec("linkedin_url", "LinkedIn page", "Presence", "exact"),
     FieldSpec("twitter_url", "X / Twitter", "Presence", "exact"),
     FieldSpec("total_funding_usd", "Disclosed funding (USD)", "Presence", "money", readonly=True,
-              hint="From public funding records in our corpus."),
+              hint="From public funding records in our corpus — partial, not a lifetime total."),
+    # Capital actually issued, as filed with the Registrar of Companies. This
+    # is the one funding-shaped number that is officially verifiable for an
+    # Indian company. It is NOT the money raised: shares are issued at a
+    # premium and the premium sits outside paid-up capital, so a company that
+    # raised a billion can show a far smaller figure here. Labelled precisely
+    # for that reason.
+    FieldSpec("paid_up_capital", "Paid-up capital (MCA)", "Registry", "money", readonly=True,
+              hint="Share capital issued, as filed with the MCA. Excludes share premium, "
+                   "so it is a floor on money raised, not the total."),
+    FieldSpec("authorized_capital", "Authorised capital (MCA)", "Registry", "money", readonly=True,
+              hint="The ceiling the company may issue up to, as filed with the MCA."),
     # --- founder-only numbers (stage-gated) -------------------------------
     FieldSpec("revenue", "Annual revenue (USD)", "Financials", "money", founder_only=True,
               hint="Cross-checked against GST filings when you consent."),

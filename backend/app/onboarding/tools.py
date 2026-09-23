@@ -787,6 +787,18 @@ def registry_evidence(ctx: Run, rec: dict, how: str) -> None:
     if registered:
         ctx.find("founded_year", "mca21", int(registered[:4]), kind=kind, prefer=True,
                  note=f"Incorporated {registered}")
+    # Capital as filed with the Registrar. The only funding-shaped figure an
+    # Indian company can be checked against without buying a document, so it is
+    # reported --- and described as issued capital, never as "raised", because
+    # share premium sits outside it.
+    for key, field, label in (
+        ("paidup_capital", "paid_up_capital", "Paid-up capital"),
+        ("authorized_capital", "authorized_capital", "Authorised capital"),
+    ):
+        value = rec.get(key)
+        if value and value > 0:
+            ctx.find(field, "mca21", float(value), kind=kind,
+                     note=f"{label} as filed with the MCA (INR)")
     if rec.get("state"):
         ctx.find("hq_state", "mca21", rec["state"], kind=kind, note="Registered office state")
     if rec.get("city"):

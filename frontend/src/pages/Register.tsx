@@ -48,11 +48,22 @@ const STATUS: Record<FieldStatus, { label: string; tone: "good" | "brand" | "neu
 };
 
 const MONEY = new Set(["revenue", "burn_rate_monthly", "cash_balance", "mrr", "total_funding_usd"]);
-const NUMBER = new Set([...MONEY, "active_users", "employee_count", "founded_year"]);
+// The MCA files capital in rupees, so these are shown in rupees, in the
+// crore/lakh units an Indian filing is actually read in. Rendering them with a
+// dollar sign would be wrong by a factor of ~85.
+const INR = new Set(["paid_up_capital", "authorized_capital"]);
+const NUMBER = new Set([...MONEY, ...INR, "active_users", "employee_count", "founded_year"]);
+
+function fmtInr(v: number): string {
+  if (v >= 1e7) return `₹${(v / 1e7).toLocaleString("en-IN", { maximumFractionDigits: 2 })} Cr`;
+  if (v >= 1e5) return `₹${(v / 1e5).toLocaleString("en-IN", { maximumFractionDigits: 2 })} L`;
+  return `₹${v.toLocaleString("en-IN")}`;
+}
 
 function fmtValue(key: string, v: any): string {
   if (v === null || v === undefined || v === "") return "—";
   if (MONEY.has(key)) return `$${Number(v).toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
+  if (INR.has(key)) return fmtInr(Number(v));
   if (key === "stage") return STAGE_LABEL[v] ?? String(v);
   if (key === "active_users" || key === "employee_count") return Number(v).toLocaleString("en-US");
   return String(v);
