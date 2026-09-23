@@ -334,6 +334,10 @@ export default function StartupDetail() {
   const band = scoreBand(score?.composite_score ?? null);
   const fraud = fraudBand(score?.fraud_likelihood_score ?? null);
   const fin = s.financials;
+  // A corpus company never reported anything to us: it was imported from a
+  // public dataset, and everything except its funding total is modelled.
+  // A registration is the company's own submission, so it is described as such.
+  const isSeeded = s.source.startsWith("seed");
   const attribution = score?.shap_top_features?.[activeDim];
   const gstGap =
     fin?.revenue && fin?.gst_reported_revenue
@@ -591,7 +595,14 @@ export default function StartupDetail() {
           )}
 
           <Card id="financials" className="scroll-mt-24 p-5 sm:p-6">
-            <SectionHeader title="Financials" description="As reported by the company, cross-checked where a source exists." />
+            <SectionHeader
+              title="Financials"
+              description={
+                isSeeded
+                  ? "Modelled from public funding records — this company never reported to us. Only the funding total is observed."
+                  : "As reported by the company, cross-checked where a source exists."
+              }
+            />
             {fin ? (
               <>
                 <div className="grid grid-cols-2 gap-x-6 border-y border-line sm:grid-cols-4">
@@ -709,7 +720,14 @@ export default function StartupDetail() {
           </Card>
 
           <Card id="people" className="scroll-mt-24 p-5 sm:p-6">
-            <SectionHeader title={`Founders (${s.founders.length})`} />
+            <SectionHeader
+              title={`Founders (${s.founders.length})`}
+              description={
+                isSeeded
+                  ? "We did not collect who founded this company. The profiles below are modelled, not real people."
+                  : undefined
+              }
+            />
             {s.founders.length ? (
               <div className="space-y-4">
                 {s.founders.map((f) => (
@@ -755,7 +773,9 @@ export default function StartupDetail() {
                           </a>
                         )}
                         {!f.linkedin_url && !f.github_username && (
-                          <span className="text-ink-muted">No verifiable public profile</span>
+                          <span className="text-ink-muted">
+                            {isSeeded ? "No public profile collected" : "No verifiable public profile"}
+                          </span>
                         )}
                       </div>
                     </div>

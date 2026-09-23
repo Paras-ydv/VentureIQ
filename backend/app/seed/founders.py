@@ -12,7 +12,14 @@ bulk equivalent of running the agentic loop over the corpus --- doing it per
 startup through the real async loop would take hours for 9k companies and hit
 GitHub's rate limit immediately.
 
-Live registrations go through the real path in enrichment/agent.py.
+These founders are deliberately anonymous. The companies in the corpus are
+real, so attaching an invented human name --- and a linkedin.com/in/... link
+that goes nowhere --- would state something false about a real company on its
+own profile page. The modelled signals stay, under a name no one can mistake
+for a person, and the UI labels the block.
+
+Live registrations go through the real path in enrichment/agent.py, where the
+founder gives their own name and GitHub is checked for real.
 """
 
 from __future__ import annotations
@@ -22,16 +29,6 @@ from sqlalchemy.orm import Session
 from app.enrichment.adapters import _seed_for
 from app.models import EnrichmentRecord, Founder, Startup
 
-FIRST = [
-    "Aarav", "Vivaan", "Ananya", "Diya", "Rohan", "Ishaan", "Kavya", "Meera",
-    "Arjun", "Priya", "Karthik", "Sneha", "Rahul", "Neha", "Aditya", "Riya",
-    "Siddharth", "Tanvi", "Vikram", "Pooja", "Nikhil", "Shreya", "Aman", "Divya",
-]
-LAST = [
-    "Sharma", "Verma", "Iyer", "Reddy", "Nair", "Gupta", "Mehta", "Rao",
-    "Kulkarni", "Bose", "Chopra", "Malhotra", "Krishnan", "Desai", "Joshi",
-    "Banerjee", "Pillai", "Agarwal", "Menon", "Shetty",
-]
 ROLES_SECONDARY = ["CTO", "COO", "Co-Founder & CTO", "Co-Founder", "Chief Product Officer"]
 
 
@@ -64,8 +61,13 @@ def seed_founders(db: Session, batch_size: int = 1000) -> dict[str, int]:
         github_payload: dict = {}
 
         for j in range(count):
-            name = f"{rng.choice(FIRST)} {rng.choice(LAST)}"
-            handle = name.lower().replace(" ", "") + str(rng.randint(10, 99))
+            # Deliberately NOT a human name. These companies are real, and we
+            # did not collect who founded them; inventing "Meera Pillai,
+            # Co-Founder of Byju's" states something false about a real
+            # company and hangs a dead linkedin.com/in/... link off it. The
+            # modelled credibility signals below are still useful, so they
+            # stay --- attached to an unmistakably synthetic person.
+            name = f"Founder {j + 1} (modelled)"
             has_li = rng.random() > (0.08 if seasoned else 0.22)
             has_gh = rng.random() > (0.45 if seasoned else 0.62)
 
@@ -84,8 +86,12 @@ def seed_founders(db: Session, batch_size: int = 1000) -> dict[str, int]:
                 startup_id=s.startup_id,
                 name=name,
                 role="Co-Founder & CEO" if j == 0 else rng.choice(ROLES_SECONDARY),
-                linkedin_url=f"https://linkedin.com/in/{handle}" if has_li else None,
-                github_username=handle if has_gh else None,
+                # No URL and no handle: both would be fabrications pointing at
+                # a profile that does not exist. A company whose founders we
+                # really did verify (a live registration) is the only one that
+                # gets these, and it scores higher for it.
+                linkedin_url=None,
+                github_username=None,
                 prior_exits=exits,
                 domain_experience_years=years,
                 linkedin_endorsement_count=endorsements,
@@ -121,8 +127,8 @@ def seed_founders(db: Session, batch_size: int = 1000) -> dict[str, int]:
                     "profile_matches_claim": True,
                 }
             if has_gh:
-                github_payload[handle] = {
-                    "login": handle,
+                github_payload[name] = {
+                    "login": name,
                     "followers": followers,
                     "public_repos": f.github_contributor_count,
                 }

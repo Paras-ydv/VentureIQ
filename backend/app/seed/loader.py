@@ -189,6 +189,15 @@ def _canon_stage(raw: str | None) -> str:
     return STAGE_BY_ROUND.get(key, "seed")
 
 
+# No Indian private round in this period came close to this. The public
+# datasets carry occasional typos --- one row lists Alteria Capital, a venture
+# debt fund, at "$150,000,000,000" where the real figure is three orders of
+# magnitude smaller. Importing that verbatim puts "$150.1B raised" on a company
+# page, which is worse than having no figure at all. We cannot know what was
+# meant, so the round is dropped rather than guessed at.
+MAX_PLAUSIBLE_ROUND_USD = 5e9
+
+
 def _parse_amount(raw: str | None) -> float | None:
     if not raw:
         return None
@@ -198,6 +207,8 @@ def _parse_amount(raw: str | None) -> float | None:
     try:
         val = float(cleaned)
     except ValueError:
+        return None
+    if val > MAX_PLAUSIBLE_ROUND_USD:
         return None
     return val if val > 0 else None
 
@@ -431,13 +442,20 @@ def attach_synthetic_financials(db: Session) -> int:
 
     for s in startups:
         raised = totals.get(s.startup_id)
-        team = s.employee_count or rng.randint(3, 40)
+        team = s.employee_count or 0
 
-        if raised is None and s.source == "seed_yc":
+        if not raised and s.source == "seed_yc" and team:
             # YC company with no round data: infer scale from headcount.
             raised = team * rng.uniform(40_000, 120_000)
-        if raised is None:
+        if not raised:
             continue
+        if not team:
+            # Headcount is missing from the India funding records. Drawing a
+            # random 3-40 person team for a company that raised hundreds of
+            # millions produced burn rates of a few thousand dollars against a
+            # billion in cash --- and runways of 49,000 months. Infer the team
+            # from the capital raised instead, so the two stay in proportion.
+            team = int(min(max(raised / rng.uniform(120_000, 260_000), 3), 6_000))
 
         # Burn scales with headcount; runway from what is left of the raise.
         monthly_burn = team * rng.uniform(2_500, 7_000)

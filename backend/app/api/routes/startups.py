@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func, or_
+from sqlalchemy import case, func, or_
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.database import get_db
@@ -114,7 +114,25 @@ def list_startups(
         "name": Startup.legal_name.asc(),
         "recent": Startup.created_at.desc(),
     }[sort]
-    query = query.order_by(sort_col)
+    if q:
+        # Someone typing a company name wants that company, not whichever
+        # high-scoring company happens to mention it in its description. Rank
+        # by how well the *name* matches first, and only then by the chosen
+        # sort. Without this, "Ola" returns a solar firm called Oolu, because
+        # "solar" contains the query and scores higher.
+        needle = q.strip().lower()
+        name = func.lower(Startup.legal_name)
+        query = query.order_by(
+            case(
+                (name == needle, 0),
+                (name.like(f"{needle}%"), 1),
+                (name.like(f"%{needle}%"), 2),
+                else_=3,
+            ),
+            sort_col,
+        )
+    else:
+        query = query.order_by(sort_col)
 
     total = query.distinct().count()
     rows = query.distinct().offset(offset).limit(limit).all()
@@ -164,7 +182,11 @@ def get_startup(startup_id: str, db: Session = Depends(get_db)):
             "cin": s.cin,
             "gstin": s.gstin,
             "created_at": s.created_at,
-            "founders": s.founders,
+            # CEO first, then stable by name: the page should not reorder
+            # the same team between refreshes.
+            "founders": sorted(
+                s.founders, key=lambda f: ("CEO" not in (f.role or ""), f.name or "")
+            ),
             "financials": s.latest_financials,
             "score": s.latest_score,
             "fraud_signals": sorted(s.fraud_signals, key=lambda f: f.run_at, reverse=True)[:10],
