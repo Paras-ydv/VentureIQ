@@ -355,6 +355,21 @@ def create_listing(
     if not s.owner_user_id and user.role != "founder":
         raise HTTPException(403, "Only a founder account can create a listing")
 
+    # One live listing per company. Two open listings would offer the same
+    # equity twice over, and an investor reading the marketplace could not tell
+    # which one they were bidding into.
+    live = (
+        db.query(Listing)
+        .filter(Listing.startup_id == startup_id, Listing.status.in_(["open", "under_offer"]))
+        .first()
+    )
+    if live:
+        raise HTTPException(
+            409,
+            "This company is already listed. Close or settle the existing listing "
+            "before creating another.",
+        )
+
     score = s.latest_score
     # Compliance-as-code: a company flagged for fraud cannot be listed.
     if score and score.fraud_likelihood_score > 60:
