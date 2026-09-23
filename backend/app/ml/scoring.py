@@ -21,6 +21,7 @@ import numpy as np
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.ml import explain
 from app.ml.features import (
     company_age_years,
     financial_vector,
@@ -76,7 +77,8 @@ def _band(score: float) -> str:
 # --------------------------------------------------------------------------
 
 
-def _score_growth(s: Startup) -> tuple[float, list[dict], str]:
+def _score_growth(s: Startup, explained: tuple | None = None) -> tuple[float, list[dict], str]:
+    """`explained` lets a bulk caller pass in an already-computed decomposition."""
     fin = financial_vector(s)
     contributions: list[dict] = []
     bundle = _load_growth()
@@ -84,22 +86,48 @@ def _score_growth(s: Startup) -> tuple[float, list[dict], str]:
     if bundle:
         import pandas as pd
 
-        row = pd.DataFrame([model_row(s)])
-        try:
-            proba = float(bundle["model"].predict_proba(row)[0, 1])
-        except Exception:
-            proba = 0.35
+        row = model_row(s)
+        # One pass gives both the prediction and its Shapley decomposition;
+        # without shap installed, fall back to predicting on its own.
+        if explained is None:
+            explained = explain.growth_explain(bundle, row)
+        if explained:
+            proba, attributions, base_rate = explained
+        else:
+            try:
+                proba = float(bundle["model"].predict_proba(pd.DataFrame([row]))[0, 1])
+            except Exception:
+                proba = 0.35
         base = proba * 100.0
         method = f"model:{bundle.get('algo', 'unknown')}"
-        contributions.append(
-            {
-                "feature": "ml_exit_probability",
-                "value": round(proba, 4),
-                "contribution": round(base - 35.0, 2),
-                "direction": "positive" if proba > 0.35 else "negative",
-                "label": f"Model-estimated probability of acquisition/IPO: {proba:.1%}",
-            }
-        )
+
+        if explained:
+            method = f"shap:{bundle.get('algo', 'unknown')}"
+            contributions.extend(attributions)
+            contributions.append(
+                {
+                    "feature": "ml_exit_probability",
+                    "value": round(proba, 4),
+                    # Already split across the attributions above; kept at zero
+                    # so the headline never double-counts them.
+                    "contribution": 0.0,
+                    "direction": "positive" if proba > base_rate / 100.0 else "negative",
+                    "label": (
+                        f"Model-estimated probability of acquisition/IPO: {proba:.1%} "
+                        f"against a {base_rate:.1f}% base rate"
+                    ),
+                }
+            )
+        else:
+            contributions.append(
+                {
+                    "feature": "ml_exit_probability",
+                    "value": round(proba, 4),
+                    "contribution": round(base - 35.0, 2),
+                    "direction": "positive" if proba > 0.35 else "negative",
+                    "label": f"Model-estimated probability of acquisition/IPO: {proba:.1%}",
+                }
+            )
     else:
         base = 35.0
         method = "heuristic_only"
@@ -166,8 +194,13 @@ def _score_growth(s: Startup) -> tuple[float, list[dict], str]:
             }
         )
 
-    contributions.sort(key=lambda c: abs(c["contribution"]), reverse=True)
-    return _clamp(base), contributions[:3], method
+    # The headline probability is a zero-weight summary line, so it is kept
+    # regardless of rank; everything else competes on absolute contribution.
+    headline = [c for c in contributions if c["feature"] == "ml_exit_probability"
+                and c["contribution"] == 0.0]
+    rest = [c for c in contributions if c not in headline]
+    rest.sort(key=lambda c: abs(c["contribution"]), reverse=True)
+    return _clamp(base), (headline + rest)[:4], method
 
 
 # --------------------------------------------------------------------------
@@ -386,11 +419,16 @@ def _score_fraud(s: Startup) -> tuple[float, list[dict], list[dict], str]:
             )
 
         if iso_raw < 0:
+            # Which ratios did the isolating, by Shapley value over path length.
+            shap_rows = explain.fraud_attributions(bundle, scaled, iso_contrib)
+            if shap_rows:
+                method = "shap:isolation_forest+pca"
+                contributions.extend(shap_rows)
             contributions.append(
                 {
                     "feature": "isolation_forest_score",
                     "value": round(iso_raw, 4),
-                    "contribution": round(iso_contrib, 2),
+                    "contribution": 0.0 if shap_rows else round(iso_contrib, 2),
                     "direction": "negative",
                     "label": "Financial profile isolates as an outlier against peer startups",
                 }
@@ -421,8 +459,12 @@ def _score_fraud(s: Startup) -> tuple[float, list[dict], list[dict], str]:
             }
         )
 
-    contributions.sort(key=lambda c: abs(c["contribution"]), reverse=True)
-    return _clamp(base), contributions[:3], signals, method
+    # Same rule as growth: the zero-weight summary line survives ranking.
+    headline = [c for c in contributions if c["feature"] == "isolation_forest_score"
+                and c["contribution"] == 0.0]
+    rest = [c for c in contributions if c not in headline]
+    rest.sort(key=lambda c: abs(c["contribution"]), reverse=True)
+    return _clamp(base), (headline + rest)[:4], signals, method
 
 
 # --------------------------------------------------------------------------
@@ -544,9 +586,13 @@ def _narrate(name: str, score: float, contribs: list[dict]) -> str:
 
 
 def compute_scores(
-    db: Session, s: Startup, cohort_stats: dict | None = None, persist: bool = True
+    db: Session,
+    s: Startup,
+    cohort_stats: dict | None = None,
+    persist: bool = True,
+    explained: tuple | None = None,
 ) -> Score:
-    growth, growth_c, growth_m = _score_growth(s)
+    growth, growth_c, growth_m = _score_growth(s, explained)
     risk, risk_c, risk_m = _score_risk(s, cohort_stats)
     fraud, fraud_c, fraud_signals, fraud_m = _score_fraud(s)
     founder, founder_c, founder_m = _score_founder(s)
@@ -603,6 +649,11 @@ def compute_scores(
     )
 
     if persist:
+        # Retire the previous scores for this startup: the history stays, but
+        # only one row is the one queries should see.
+        db.query(Score).filter(
+            Score.startup_id == s.startup_id, Score.is_current.is_(True)
+        ).update({"is_current": False}, synchronize_session=False)
         db.add(score)
         for sig in fraud_signals:
             db.add(FraudSignal(startup_id=s.startup_id, **sig))
@@ -618,12 +669,24 @@ def score_all(db: Session, batch_log_every: int = 500) -> int:
     startups = db.query(Startup).all()
     density = Counter((s.sector, s.stage) for s in startups)
 
+    # Explaining a chunk at a time costs about what predicting alone does; one
+    # row at a time would roughly double the run.
+    bundle = _load_growth()
+    explanations: dict[str, tuple | None] = {}
+    if bundle:
+        chunk = 500
+        for start in range(0, len(startups), chunk):
+            window = startups[start:start + chunk]
+            results = explain.growth_explain_batch(bundle, [model_row(x) for x in window])
+            explanations.update(zip((x.startup_id for x in window), results, strict=True))
+
     n = 0
     for s in startups:
         key = (s.sector, s.stage)
         compute_scores(
             db, s,
             cohort_stats={"cohort_size": density[key], "sector_density": density[key]},
+            explained=explanations.get(s.startup_id),
         )
         n += 1
         if n % batch_log_every == 0:

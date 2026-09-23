@@ -88,10 +88,12 @@ export interface StartupSummary {
 
 export interface Attribution {
   feature: string;
-  value: number | null;
+  value: number | string | null;
   contribution: number;
   direction: "positive" | "negative";
   label: string;
+  /** Raw Shapley value in the model's own units, when SHAP produced this row. */
+  shap_value?: number | null;
 }
 
 export interface ScoreDetail {

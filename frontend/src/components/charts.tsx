@@ -361,11 +361,20 @@ export function AttributionBars({
   items: { label: string; contribution: number; feature: string }[];
 }) {
   if (!items.length) return null;
-  const max = Math.max(...items.map((i) => Math.abs(i.contribution))) || 1;
+  // A zero contribution is a summary line, not a measurement: the model's
+  // headline prediction, already split across the bars below it.
+  const summary = items.filter((i) => i.contribution === 0);
+  const bars = items.filter((i) => i.contribution !== 0);
+  const max = Math.max(...bars.map((i) => Math.abs(i.contribution))) || 1;
 
   return (
     <div className="space-y-3">
-      {items.map((it, i) => {
+      {summary.map((it, i) => (
+        <p key={`s${i}`} className="text-[12.5px] leading-snug text-ink-muted">
+          {it.label}
+        </p>
+      ))}
+      {bars.map((it, i) => {
         const positive = it.contribution >= 0;
         const width = (Math.abs(it.contribution) / max) * 50;
         return (

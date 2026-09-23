@@ -76,6 +76,31 @@ const SEVERITY_BADGE: Record<string, "critical" | "serious" | "warning"> = {
   low: "warning",
 };
 
+/** How a score's attributions were produced. `shap:` means exact Shapley
+ *  values from the trained tree model; everything else is an additive rule. */
+const modelName = (method: string) => method.split(":")[1]?.replace(/_/g, " ") ?? "the model";
+
+function methodBadge(method?: string): string {
+  if (!method) return "rules";
+  if (method.startsWith("shap:")) return "SHAP";
+  if (method.startsWith("model:")) return "ML model";
+  return "rules";
+}
+
+function methodLabel(method: string): string {
+  if (method.startsWith("shap:")) return `SHAP · ${modelName(method)}`;
+  if (method.startsWith("model:")) return `Model · ${modelName(method)}`;
+  return method.replace(/_/g, " ");
+}
+
+function methodTitle(method: string): string {
+  if (method.startsWith("shap:"))
+    return `Exact Shapley values from the ${modelName(method)} model, grouped by feature and converted to points on this score`;
+  if (method.startsWith("model:"))
+    return "The model's prediction, without a per-feature decomposition";
+  return "Additive rule contributions — each term is its own explanation";
+}
+
 function Highlight({
   label,
   value,
@@ -527,7 +552,7 @@ export default function StartupDetail() {
                         {d.label}
                       </span>
                       <span className="text-[11px] text-ink-muted">
-                        {isFraud ? "higher = worse" : score.shap_top_features?.[d.key]?.method?.startsWith("model") ? "ML model" : "rules"}
+                        {isFraud ? "higher = worse" : methodBadge(score.shap_top_features?.[d.key]?.method)}
                       </span>
                     </button>
                   );
@@ -539,8 +564,8 @@ export default function StartupDetail() {
                   <div className="mb-3 flex flex-wrap items-center gap-2">
                     <span className="eyebrow">Top contributing features</span>
                     {attribution?.method && (
-                      <span className="chip text-[11px]" title="How this attribution was produced">
-                        via {attribution.method.replace(/_/g, " ")}
+                      <span className="chip text-[11px]" title={methodTitle(attribution.method)}>
+                        {methodLabel(attribution.method)}
                       </span>
                     )}
                   </div>

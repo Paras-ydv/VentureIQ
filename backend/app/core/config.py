@@ -77,6 +77,13 @@ class Settings(BaseSettings):
     # we mark the score low-confidence (docs/BUILD_PLAN.md Problem 4).
     min_cohort_size: int = 20
 
+    # Shapley attributions for the two trained models. `shap` pulls in numba,
+    # which costs roughly 200 MB of resident memory the first time it is
+    # imported --- more than a 512 MB instance can spare on top of the models
+    # and the retrieval index. Turn it off there (VIQ_ENABLE_SHAP=false) and
+    # scores still compute; they report the prediction instead of decomposing it.
+    enable_shap: bool = True
+
     # Deployed frontends: set VIQ_CORS_ORIGINS='["https://your-app.vercel.app"]'.
     # The regex additionally lets Vercel preview URLs through.
     cors_origin_regex: str | None = r"https://.*\.vercel\.app"
