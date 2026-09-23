@@ -69,7 +69,7 @@ def sector_breakdown(limit: int = Query(12, ge=1, le=40), db: Session = Depends(
             func.avg(Score.composite_score).label("avg_score"),
             func.avg(Score.fraud_likelihood_score).label("avg_fraud"),
         )
-        .join(Score, Score.startup_id == Startup.startup_id)
+        .join(Score, (Score.startup_id == Startup.startup_id) & Score.is_current.is_(True))
         .group_by(Startup.sector)
         .order_by(func.count(func.distinct(Startup.startup_id)).desc())
         .limit(limit)
@@ -94,7 +94,7 @@ def stage_breakdown(db: Session = Depends(get_db)):
             func.count(func.distinct(Startup.startup_id)),
             func.avg(Score.composite_score),
         )
-        .join(Score, Score.startup_id == Startup.startup_id)
+        .join(Score, (Score.startup_id == Startup.startup_id) & Score.is_current.is_(True))
         .group_by(Startup.stage)
         .all()
     )
@@ -178,7 +178,7 @@ def constellation(limit: int = Query(1800, ge=100, le=10000), db: Session = Depe
             Score.composite_score,
             Score.fraud_likelihood_score,
         )
-        .join(Score, Score.startup_id == Startup.startup_id)
+        .join(Score, (Score.startup_id == Startup.startup_id) & Score.is_current.is_(True))
         .order_by(Score.composite_score.desc())
         .all()
     )

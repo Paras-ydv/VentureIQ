@@ -98,7 +98,9 @@ def list_startups(
     if min_score is not None or max_fraud is not None or sort in {
         "composite_score", "growth", "risk", "founder"
     }:
-        query = query.join(Score, Score.startup_id == Startup.startup_id)
+        query = query.join(
+            Score, (Score.startup_id == Startup.startup_id) & Score.is_current.is_(True)
+        )
         if min_score is not None:
             query = query.filter(Score.composite_score >= min_score)
         if max_fraud is not None:

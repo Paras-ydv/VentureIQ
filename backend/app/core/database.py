@@ -29,6 +29,7 @@ def ensure_columns() -> None:
 
     inspector = inspect(engine)
     existing_tables = set(inspector.get_table_names())
+    added: set[tuple[str, str]] = set()
     with engine.begin() as conn:
         for table in Base.metadata.sorted_tables:
             if table.name not in existing_tables:
@@ -41,6 +42,21 @@ def ensure_columns() -> None:
                     continue  # cannot be added safely; needs a real migration
                 ddl = column.type.compile(engine.dialect)
                 conn.execute(text(f'ALTER TABLE "{table.name}" ADD COLUMN "{column.name}" {ddl}'))
+                added.add((table.name, column.name))
+
+        # A column added this way is NULL on every existing row, so anything
+        # that queries on it needs a one-time backfill here.
+        if ("score", "is_current") in added:
+            conn.execute(text("UPDATE score SET is_current = 0"))
+            conn.execute(text("""
+                UPDATE score SET is_current = 1 WHERE score_id IN (
+                    SELECT score_id FROM (
+                        SELECT score_id, ROW_NUMBER() OVER (
+                            PARTITION BY startup_id
+                            ORDER BY computed_at DESC, score_id DESC) AS rn
+                        FROM score
+                    ) WHERE rn = 1
+                )"""))
 
 
 def get_db() -> Generator[Session, None, None]:

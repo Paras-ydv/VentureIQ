@@ -27,7 +27,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.models import BehavioralEvent, FundingRound, Investor, Startup
+from app.models import BehavioralEvent, FundingRound, Investor, Score, Startup
 
 WEIGHTS = {"preference": 0.40, "behavioral": 0.25, "network": 0.15, "quality": 0.20}
 
@@ -252,8 +252,7 @@ def build_feed(
     # Only rank scored startups --- an unscored company has nothing to rank on.
     candidates = (
         db.query(Startup)
-        .join(Startup.scores)
-        .filter(Startup.verified.is_(True) if False else True)  # keep all for MVP
+        .join(Score, (Score.startup_id == Startup.startup_id) & Score.is_current.is_(True))
         .distinct()
         .limit(4000)
         .all()

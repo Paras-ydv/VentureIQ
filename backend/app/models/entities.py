@@ -106,7 +106,8 @@ class Startup(Base):
     def latest_score(self) -> Score | None:
         if not self.scores:
             return None
-        return max(self.scores, key=lambda s: s.computed_at)
+        current = [s for s in self.scores if s.is_current]
+        return max(current or self.scores, key=lambda s: s.computed_at)
 
 
 class StartupFinancials(Base):
@@ -255,6 +256,12 @@ class Score(Base):
     cohort_size: Mapped[int | None] = mapped_column(Integer)
     model_version: Mapped[str] = mapped_column(String(48))
     computed_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+
+    # Scoring appends rather than overwrites, so a startup keeps its scoring
+    # history. Exactly one row per startup is the current one; SQL that joins
+    # this table must filter on it, or a rescored startup counts several times
+    # in aggregates and sorts on whichever old row the planner happens to pick.
+    is_current: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
 
     startup: Mapped[Startup] = relationship(back_populates="scores")
 
