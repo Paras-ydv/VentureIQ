@@ -45,6 +45,29 @@ class TestSignIn:
         r = client.post("/api/auth/login", json={"email": account["email"], "password": "nope"})
         assert r.status_code == 401
 
+    def test_repeated_wrong_passwords_are_throttled(self, client, account):
+        """Guessing a password should get expensive, not stay free."""
+        from app.core import security
+
+        security.clear_failed_logins(f"email:{account['email']}", "ip:testclient")
+        codes = [
+            client.post("/api/auth/login",
+                        json={"email": account["email"], "password": f"wrong-{i}"}).status_code
+            for i in range(security._MAX_ATTEMPTS + 2)
+        ]
+        assert codes[0] == 401
+        assert 429 in codes, "unlimited password guesses are allowed"
+        # The right password is refused too while the block stands.
+        blocked = client.post("/api/auth/login",
+                              json={"email": account["email"], "password": "correct-horse-9"})
+        assert blocked.status_code == 429
+        assert blocked.headers.get("Retry-After")
+
+        security.clear_failed_logins(f"email:{account['email']}", "ip:testclient")
+        assert client.post("/api/auth/login",
+                           json={"email": account["email"], "password": "correct-horse-9"}
+                           ).status_code == 200
+
     def test_unknown_account_gives_the_same_answer(self, client):
         """Login must not reveal which emails exist."""
         r = client.post("/api/auth/login", json={"email": "nobody@example.com", "password": "nope"})

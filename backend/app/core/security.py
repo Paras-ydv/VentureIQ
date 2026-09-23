@@ -9,6 +9,7 @@ stolen or stale token cannot grant a role the account no longer has.
 from __future__ import annotations
 
 import secrets
+from threading import Lock
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -70,3 +71,47 @@ def decode_token(token: str) -> dict[str, Any] | None:
         return jwt.decode(token, _secret(), algorithms=[ALGORITHM])
     except JWTError:
         return None
+
+
+# --------------------------------------------------------------------------
+# login throttling
+# --------------------------------------------------------------------------
+
+# Failed sign-in attempts, keyed by email and by client address. In-process and
+# therefore per-worker: it raises the cost of guessing a password from
+# unlimited to a few per minute, which is what it is for. A deployment behind
+# several workers wants this in Redis, and a public one wants it at the edge
+# as well.
+_ATTEMPT_WINDOW = timedelta(minutes=15)
+_MAX_ATTEMPTS = 8
+_attempts: dict[str, list[datetime]] = {}
+_attempts_lock = Lock()
+
+
+def _recent(key: str, now: datetime) -> list[datetime]:
+    return [t for t in _attempts.get(key, []) if now - t < _ATTEMPT_WINDOW]
+
+
+def login_blocked(*keys: str) -> int:
+    """Seconds to wait before the next attempt, or 0 when not throttled."""
+    now = datetime.now(UTC)
+    with _attempts_lock:
+        for key in keys:
+            recent = _recent(key, now)
+            _attempts[key] = recent
+            if len(recent) >= _MAX_ATTEMPTS:
+                return max(1, int((recent[0] + _ATTEMPT_WINDOW - now).total_seconds()))
+    return 0
+
+
+def record_failed_login(*keys: str) -> None:
+    now = datetime.now(UTC)
+    with _attempts_lock:
+        for key in keys:
+            _attempts[key] = [*_recent(key, now), now]
+
+
+def clear_failed_logins(*keys: str) -> None:
+    with _attempts_lock:
+        for key in keys:
+            _attempts.pop(key, None)
