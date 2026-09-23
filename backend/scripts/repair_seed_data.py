@@ -95,8 +95,10 @@ def repair_yc_founding_dates(db) -> dict[str, int]:
         if batch and s.yc_batch != batch:
             s.yc_batch = batch
             recorded += 1
-        # Only clear dates that are the batch-year artefact: 1 January.
-        if s.founded_date and s.founded_date.month == 1 and s.founded_date.day == 1:
+        # The YC directory has no founding year at all: batch-year dates land
+        # on 1 January, and the rest came from `launched_at`, which is when the
+        # YC profile went up. Neither is a founding date, so none are kept.
+        if s.founded_date:
             s.founded_date = None
             cleared += 1
     db.commit()
@@ -163,6 +165,14 @@ def repair_financials(db) -> dict[str, int]:
             min(max(raised / rng.uniform(120_000, 260_000), 3), 6_000)
         )
         burn = round(team * rng.uniform(2_500, 7_000), 2)
+        # Dropping an implausible round leaves a cash balance that was derived
+        # from the old total --- Alteria Capital kept $62.9bn in the bank
+        # against $140m raised. Cash is a fraction of the money raised.
+        if fin.cash_balance > raised:
+            fin.cash_balance = round(raised * rng.uniform(0.15, 0.75), 2)
+            fin.burn_rate_monthly = burn
+            fixed += 1
+            continue
         # Only touch rows the old rule got wrong: a runway beyond ~12 years
         # means burn and cash were drawn on different scales.
         if fin.burn_rate_monthly and fin.cash_balance / fin.burn_rate_monthly <= 150:
