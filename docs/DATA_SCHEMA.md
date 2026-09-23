@@ -248,9 +248,13 @@ A `startup` is linked to a registry company by `startup.cin`.
 | `fraud_likelihood_score` | float 0–100 🧮 | from `fraud_signal` |
 | `founder_credibility_score` | float 0–100 🧮 | exits, domain years, LinkedIn/GitHub signals |
 | `composite_score` | float 0–100 🧮 | weighted aggregate — weights are a v1 config, not learned jointly (report §8.3: combining too early hurts, per Maarouf et al. ablation) |
-| `shap_top_features` | jsonb | top-3 SHAP features per score + generated text rationale |
+| `shap_top_features` | jsonb | per dimension: `{method, features[]}`. `method` names what produced the attribution — `shap:<model>` for exact Shapley values from a trained tree model, `rules` for an additive rule composition. Each feature carries `contribution` in score points, `direction`, a readable `label`, and, for SHAP rows, the raw `shap_value` in the model's own units (log-odds for growth, path length for the isolation forest) |
+| `rationale` | jsonb | generated plain-English text per score |
+| `confidence` | string | `high` / `low` — low when the peer cohort is below `min_cohort_size` |
+| `cohort_size` | int | peers the percentile read is based on |
 | `model_version` | string | |
 | `computed_at` | timestamp | |
+| `is_current` | bool | scoring appends rather than overwrites, so a startup keeps its history; exactly one row per startup is current. **SQL that joins this table must filter on it**, or a rescored startup is counted several times in aggregates and sorted on an arbitrary old row |
 
 ### 3.2 `match_recommendation`
 | Field | Type | Notes |

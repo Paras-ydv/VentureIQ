@@ -34,8 +34,10 @@ quick start and a table of exactly what is real vs. mocked vs. simulated. Run
 - `frontend/` — Vite + React 19 + TypeScript + Tailwind v4, light and dark themes.
   Public pages: Landing, Discover, StartupDetail, Model, Marketplace, Register (the
   agentic registration), Login. Signed-in pages: Overview, Feed, Saved, Alerts,
-  Onboarding (mandate), MyCompanies, Account (profile + KYC). Charts are hand-built
-  SVG; the 3D scenes are three.js/react-three-fiber, lazy-loaded.
+  Onboarding (mandate), MyCompanies, Account (profile + KYC), Reviews (the KYC
+  queue, reviewers only). Charts are hand-built SVG; the 3D scenes are
+  three.js/react-three-fiber, lazy-loaded. Each route renders inside an error
+  boundary, so one broken page never blanks the app.
 - `backend/tests/` — pytest, 99 tests (`pytest -m "not network"` for the offline 89).
 - The growth model is genuinely trained, not stubbed: gradient boosting on 1,896
   labelled YC companies, **AUROC 0.741** on a held-out split, beating logistic
@@ -61,7 +63,13 @@ quick start and a table of exactly what is real vs. mocked vs. simulated. Run
   statements; the CIN is checked against the MCA registry, the GSTIN's check digit
   validated. OCR repairs are accepted only when a check digit or the registry agrees.
 - Accounts: email + password (bcrypt, JWT) and Google OAuth; investor and founder
-  roles with ownership enforced server-side; KYC gates the marketplace.
+  roles with ownership enforced server-side; KYC gates the marketplace. Repeated
+  failed sign-ins are throttled per account and per caller (in-process, so a
+  multi-worker deployment wants this in Redis instead).
+- Explainability (`app/ml/explain.py`): exact Shapley values from
+  `shap.TreeExplainer` for both trained models, grouped into features a reader
+  recognises. `shap` costs ~200 MB resident, so it is behind `VIQ_ENABLE_SHAP`
+  and every caller falls back cleanly when it is off.
 - Paid API budgets: LinkedIn and GST lookups are cached in `backend/cache.db` and
   capped per month, so repeat lookups never spend quota.
 
@@ -152,6 +160,10 @@ above is what Phase 1 code should actually target.
   GST returns and exact turnover stay simulated until there is a consented GSP flow.
   GitHub, RDAP, DNS, the MCA master data and the public GST register are fine to call
   for real, with caching (30-day TTL, retries with backoff, per report §8.1.3).
+- **Scores append, they don't overwrite.** `score.is_current` marks the one row
+  per startup that queries should see. Any new SQL that joins `score` must filter
+  on it, or a rescored startup is counted twice in aggregates and sorted on an
+  arbitrary old row.
 - **Only independent evidence verifies.** In the onboarding ledger, mocked or locally
   computed evidence can support a value but must never mark it verified. Keep that
   rule when adding sources (`app/onboarding/ledger.py`).

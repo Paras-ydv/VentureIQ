@@ -48,6 +48,18 @@ cd backend
 `network` tests really do fetch websites, RDAP, DNS and GitHub; `registry` tests
 need `backend/registry.db` and skip themselves without it.
 
+### Reviewing KYC
+
+Identity decisions are made by a person, from the queue at `/reviews`. That page
+and the endpoints behind it are open to an account whose role is `admin`, or to
+`compliance@ventureiq.local`. Register that address like any other account and
+it can review:
+
+```bash
+curl -sX POST localhost:8000/api/auth/register -H 'Content-Type: application/json' \
+  -d '{"email":"compliance@ventureiq.local","password":"<pick one>","name":"Compliance","role":"investor"}'
+```
+
 ### Optional: keys and the India company registry
 
 Copy `backend/.env.example` to `backend/.env` and fill in what you have:
@@ -104,9 +116,13 @@ are deliberately not in git. Two consequences on Render's free instance:
   waits ~1 minute for a cold start.
 
 The API needs roughly 400 MB of RAM once the models and the retrieval index are
-loaded, which is close to the 512 MB free limit. If it gets OOM-killed, either
-build with `python scripts/bootstrap.py --fast` (India-only corpus) or move to a
-paid instance.
+loaded, which is close to the 512 MB free limit. **Set `VIQ_ENABLE_SHAP=false`
+there**: `shap` imports numba, which costs about another 200 MB the first time a
+score is explained, and that is what will get the instance OOM-killed. Scores
+still compute without it — they report the model's prediction instead of
+decomposing it. If it is still tight, build with
+`python scripts/bootstrap.py --fast` (India-only corpus) or move to a paid
+instance.
 
 `backend/registry.db` (the MCA company registry) is not deployed: it is
 gitignored and too large. Without it, CIN lookups still work live against
@@ -123,7 +139,7 @@ its "couldn't load" state — nothing is hard-coded.
 | Layer | Status | Notes |
 |---|---|---|
 | Document verification (OCR) | **Real** | Tesseract reads an uploaded certificate or statement; the CIN is looked up in the MCA registry, the GSTIN check digit validated, and revenue compared with the profile. OCR confusions (5↔S, 0↔O) are repaired only when the check digit or the registry then agrees |
-| KYC | **Partly real** | The document is read and the PAN's structure, the name and any SEBI number are checked. Proving identity needs a licensed provider, so automated checks stop at `passed_checks` and a human grants `verified`; every decision is audited |
+| KYC | **Partly real** | The document is read and the PAN's structure, the name and any SEBI number are checked. Proving identity needs a licensed provider, so automated checks stop at `passed_checks` and a reviewer grants `verified` from the queue at `/reviews`; every decision is audited |
 | Marketplace | **Simulated, with real compliance** | Listings, offers, right-of-first-refusal and settlement are a state machine — no money moves. The rules (KYC, accreditation threshold, self-dealing, company score) are enforced per offer and returned with reasons |
 | Google sign-in | **Real, opt-in** | OAuth 2.0 authorization-code flow with a signed state; accounts link by email. Needs `VIQ_GOOGLE_CLIENT_ID` / `_SECRET` |
 | Accounts & authorisation | **Real** | Email + password with bcrypt, JWT sessions, investor and founder roles. Feeds, activity, watchlists and event writes are owned by one account and refused to everyone else |
@@ -132,14 +148,14 @@ its "couldn't load" state — nothing is hard-coded.
 | Growth-potential model | **Real** | Gradient boosting on 1,896 labelled YC companies, **AUROC 0.741** held out |
 | Risk / founder scoring | **Real** | Additive models over runway, burn efficiency, competitive density, founder track record |
 | Fraud detection | **Real** | Isolation Forest + PCA reconstruction error, fitted on 8,511 financial profiles |
-| Explainability | **Real** | Per-model feature attributions + generated plain-English rationale for every score |
+| Explainability | **Real** | Exact Shapley values (`shap.TreeExplainer`) for both trained models — the growth classifier and the isolation forest — grouped into readable features; the two rule-composed scores report their own additive terms. Every attribution says which mechanism produced it. Needs ~200 MB of memory, so it can be turned off with `VIQ_ENABLE_SHAP=false` |
 | RAG benchmarking | **Real** | TF-IDF vector index over the 9,287-startup corpus, stage- and sector-filtered peer retrieval |
 | Investor matching | **Real** | Blends stated mandate, behavioural events, co-investment network position, and company quality |
 | GitHub / WHOIS enrichment | **Real** | Live public GitHub REST API per founder and org; domain age via RDAP |
 | India company registry | **Real** | MCA Company Master Data (36.7 lakh companies, data.gov.in open data): searchable in Discover, claimable, and used to verify CIN, registered name and incorporation date at registration |
 | Founder LinkedIn profiles | **Real, opt-in** | Third-party RapidAPI aggregator behind `VIQ_RAPIDAPI_KEY`; checks that a founder's profile exists, is theirs, and lists this company. Mocked when the key is unset |
 | GST register | **Real** | Legal name, status, registration date and state for a GSTIN, via RapidAPI `gst-return-status`. Turnover and filing history need the vendor's paid tier; exact turnover needs taxpayer consent, so revenue reconciliation stays simulated |
-| MCA21 on the profile "Run agent" button | **Real** | Uses the imported MCA master data (or a live CIN lookup) | Deterministic fixtures behind the same interface — these sources are fee-gated, consent-gated, or ToS-blocked. See `data/raw/README.md` |
+| MCA21 on the profile "Run agent" button | **Real** | Uses the imported MCA master data, or a live CIN lookup when the registry isn't imported |
 | Marketplace escrow / settlement | **Simulated** | Regulated activity requiring SEBI/RBI licences. See `docs/BUILD_PLAN.md` Problem 1 |
 
 Provenance is visible in the UI: every enrichment row carries a dot marking
@@ -173,16 +189,23 @@ backend/
     core/          config, database
     models/        SQLAlchemy entities (docs/DATA_SCHEMA.md made concrete)
     schemas/       Pydantic request/response contracts
-    api/routes/    startups · investors · analytics · marketplace
-    ml/            features · train · scoring · rag · matching
-    enrichment/    adapters (GitHub real, rest mocked) + the agentic planner
+    api/routes/    startups · investors · analytics · marketplace · auth · oauth
+                   kyc · documents · onboarding · registry
+    ml/            features · train · scoring · explain (SHAP) · rag · matching
+    enrichment/    source adapters (GitHub, GST, LinkedIn) + the agentic planner
+    onboarding/    the registration agent, its tools and the field ledger
+    documents/     OCR and field extraction
+    registry/      the imported MCA company master data
     seed/          ETL from data/raw
   scripts/bootstrap.py
+  tests/           pytest (99 tests; `-m "not network"` for the offline 89)
 frontend/
   src/
-    components/    design primitives, custom SVG charts, app shell
-    pages/         Overview · Discover · StartupDetail · Feed · Alerts · Model · Submit · Onboarding
-    lib/           API client, formatters, investor context
+    components/    design primitives, custom SVG charts, three.js scenes, app shell
+    pages/         Landing · Discover · StartupDetail · Model · Marketplace · Register
+                   Login · Overview · Feed · Saved · Alerts · Onboarding
+                   MyCompanies · Account · Reviews
+    lib/           API client, formatters, auth and investor context
 docs/
   DATA_SCHEMA.md   field-level schema for every entity
   BUILD_PLAN.md    phased build order + the 7 problems that will bite
