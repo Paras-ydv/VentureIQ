@@ -15,6 +15,7 @@ from __future__ import annotations
 import csv
 import json
 import re
+from collections import Counter
 from datetime import date, datetime
 from typing import Any
 
@@ -259,6 +260,13 @@ def load_indian_funding(db: Session, limit: int | None = None) -> dict[str, int]
     created = 0
     rounds = 0
     by_name: dict[str, Startup] = {}
+    # One company's rounds can each carry a different industry label. Dunzo's
+    # five rows say "Career, Special Duties and Personal Development",
+    # "Information Technology (IT)" and "Transportation and Tourism" three
+    # times. Taking whichever row happened to create the company made Dunzo
+    # "Enterprise Software"; a vote across its rows gets it right, and sector
+    # feeds both the peer cohort and the growth model.
+    sector_votes: dict[str, list[str]] = {}
 
     # --- 2015-2019 file: has dates, investors, round type -----------------
     path = DATA_RAW / "startup_funding_modified.csv"
@@ -294,6 +302,9 @@ def load_indian_funding(db: Session, limit: int | None = None) -> dict[str, int]
                     if limit and created >= limit:
                         break
 
+                sector_votes.setdefault(key, []).append(
+                    _canon_sector(row.get("Industry Vertical"))
+                )
                 amount = _parse_amount(row.get("Amount in USD"))
                 db.add(
                     FundingRound(
@@ -349,6 +360,7 @@ def load_indian_funding(db: Session, limit: int | None = None) -> dict[str, int]
                     if startup.long_description:
                         startup.one_liner = startup.one_liner or startup.long_description[:280]
 
+                sector_votes.setdefault(key, []).append(_canon_sector(row.get("Sector")))
                 db.add(
                     FundingRound(
                         startup_id=startup.startup_id,
@@ -360,8 +372,20 @@ def load_indian_funding(db: Session, limit: int | None = None) -> dict[str, int]
                 )
                 rounds += 1
 
+    # Majority sector, ignoring rows that told us nothing.
+    resectored = 0
+    for key, votes in sector_votes.items():
+        startup = by_name.get(key)
+        useful = [v for v in votes if v != "Other"]
+        if not startup or not useful:
+            continue
+        best = Counter(useful).most_common(1)[0][0]
+        if best != startup.sector:
+            startup.sector = best
+            resectored += 1
+
     db.flush()
-    return {"startups": created, "rounds": rounds}
+    return {"startups": created, "rounds": rounds, "resectored": resectored}
 
 
 def load_yc(db: Session, india_only: bool = False, limit: int | None = None) -> dict[str, int]:
@@ -383,15 +407,10 @@ def load_yc(db: Session, india_only: bool = False, limit: int | None = None) -> 
         batch = c.get("batch") or ""
         m = re.search(r"(\d{4})", batch)
         batch_year = int(m.group(1)) if m else None
-        launched = c.get("launched_at")
+        # The YC directory carries no founding year --- only the batch, and a
+        # `launched_at` timestamp for when the YC profile went up. Neither is
+        # when the company was founded, so neither is recorded as one.
         founded = None
-        if batch_year:
-            founded = date(batch_year, 1, 1)
-        elif launched:
-            try:
-                founded = datetime.fromtimestamp(launched).date()
-            except (ValueError, OSError, TypeError):
-                founded = None
 
         locations = c.get("all_locations") or ""
         city = locations.split(",")[0].strip() if locations else None
@@ -403,6 +422,7 @@ def load_yc(db: Session, india_only: bool = False, limit: int | None = None) -> 
             sector=_canon_yc_sector(c),
             sub_vertical=_clean((c.get("subindustry") or "").split("->")[-1]),
             founded_date=founded,
+            yc_batch=batch or None,
             hq_city=city,
             website=c.get("website"),
             one_liner=(_clean(c.get("one_liner")) or "")[:280] or None,

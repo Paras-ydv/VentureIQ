@@ -179,6 +179,7 @@ def get_startup(startup_id: str, db: Session = Depends(get_db)):
             "website": s.website,
             "hq_state": s.hq_state,
             "founded_date": s.founded_date,
+            "yc_batch": s.yc_batch,
             "cin": s.cin,
             "gstin": s.gstin,
             "created_at": s.created_at,

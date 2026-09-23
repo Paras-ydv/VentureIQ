@@ -62,6 +62,7 @@ class StartupIn(BaseModel):
     sector: str = Field(min_length=2, max_length=96)
     sub_vertical: str | None = None
     founded_date: date | None = None
+    yc_batch: str | None = None
     hq_city: str | None = None
     hq_state: str | None = None
     website: str | None = None
@@ -200,6 +201,7 @@ class StartupDetail(StartupSummary):
     website: str | None = None
     hq_state: str | None = None
     founded_date: date | None = None
+    yc_batch: str | None = None
     cin: str | None = None
     gstin: str | None = None
     created_at: datetime

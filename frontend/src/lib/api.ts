@@ -167,6 +167,8 @@ export interface StartupDetail extends StartupSummary {
   website: string | null;
   hq_state: string | null;
   founded_date: string | null;
+  /** Y Combinator batch, e.g. "Winter 2022". Not a founding date. */
+  yc_batch?: string | null;
   cin: string | null;
   gstin: string | null;
   created_at: string;

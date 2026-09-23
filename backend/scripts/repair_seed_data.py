@@ -25,6 +25,7 @@ runway feed the risk score:
 from __future__ import annotations
 
 import sys
+from collections import Counter
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -65,6 +66,82 @@ def drop_implausible_rounds(db) -> dict[str, int]:
             fin.total_funding_usd = round(total, 2) or None
     db.commit()
     return {"implausible_rounds_dropped": len(bad), "companies_retotalled": len(affected)}
+
+
+def repair_yc_founding_dates(db) -> dict[str, int]:
+    """Replace YC batch years masquerading as founding dates with the batch.
+
+    The YC directory has no founding year, so the loader used to store the
+    accelerator batch year as `founded_date`. BharatX (YC W22, founded 2019)
+    therefore showed "Founded 2022", and the registration agent treated that as
+    a source corroborating the same wrong year.
+    """
+    import json
+
+    from app.core.config import DATA_RAW
+
+    path = DATA_RAW / "yc_companies_all.json"
+    if not path.exists():
+        return {"yc_batches_recorded": 0, "false_founding_dates_cleared": 0}
+    batches = {
+        (c.get("slug") or "").lower(): (c.get("batch") or "").strip()
+        for c in json.load(path.open())
+        if c.get("batch")
+    }
+
+    recorded = cleared = 0
+    for s in db.query(Startup).filter(Startup.source == "seed_yc").all():
+        batch = batches.get((s.slug or "").lower())
+        if batch and s.yc_batch != batch:
+            s.yc_batch = batch
+            recorded += 1
+        # Only clear dates that are the batch-year artefact: 1 January.
+        if s.founded_date and s.founded_date.month == 1 and s.founded_date.day == 1:
+            s.founded_date = None
+            cleared += 1
+    db.commit()
+    return {"yc_batches_recorded": recorded, "false_founding_dates_cleared": cleared}
+
+
+def repair_sectors(db) -> dict[str, int]:
+    """Re-derive each India-funding company's sector by majority vote.
+
+    The loader used to take the sector off whichever round row created the
+    company, so Dunzo --- three of whose five rows say "Transportation and
+    Tourism" --- came out as Enterprise Software.
+    """
+    import csv
+
+    from app.core.config import DATA_RAW
+    from app.seed.loader import _canon_sector, _norm_name
+
+    votes: dict[str, list[str]] = {}
+    files = [
+        ("startup_funding_modified.csv", "Startup Name", "Industry Vertical", "utf-8"),
+        ("startup_funding2021.csv", "Company/Brand", "Sector", "utf-8-sig"),
+    ]
+    for filename, name_col, sector_col, encoding in files:
+        path = DATA_RAW / filename
+        if not path.exists():
+            continue
+        with path.open(encoding=encoding, errors="replace") as fh:
+            for row in csv.DictReader(fh):
+                name = (row.get(name_col) or "").strip()
+                if len(name) < 2:
+                    continue
+                votes.setdefault(_norm_name(name), []).append(_canon_sector(row.get(sector_col)))
+
+    changed = 0
+    for s in db.query(Startup).filter(Startup.source == "seed_india_funding").all():
+        useful = [v for v in votes.get(s.slug or _norm_name(s.legal_name), []) if v != "Other"]
+        if not useful:
+            continue
+        best = Counter(useful).most_common(1)[0][0]
+        if best != s.sector:
+            s.sector = best
+            changed += 1
+    db.commit()
+    return {"sectors_corrected": changed}
 
 
 def repair_financials(db) -> dict[str, int]:
@@ -125,7 +202,13 @@ def repair_founders(db) -> dict[str, int]:
 def main() -> None:
     db = SessionLocal()
     try:
-        out = {**drop_implausible_rounds(db), **repair_financials(db), **repair_founders(db)}
+        out = {
+            **drop_implausible_rounds(db),
+            **repair_yc_founding_dates(db),
+            **repair_sectors(db),
+            **repair_financials(db),
+            **repair_founders(db),
+        }
     finally:
         db.close()
     for k, v in out.items():

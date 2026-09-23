@@ -36,6 +36,14 @@ def _safe_log(x: float | None) -> float:
 
 def company_age_years(s: Startup) -> float:
     if not s.founded_date:
+        # The growth model was trained on `2026 - batch_year` for YC companies,
+        # so keep feeding it exactly that where the batch is all we have. It is
+        # years-since-batch rather than true age, but train and serve agree,
+        # which is what the model needs.
+        if s.yc_batch:
+            year = next((int(t) for t in s.yc_batch.split() if t.isdigit()), None)
+            if year:
+                return max(0.0, float(date.today().year - year))
         return 3.0
     today = date.today()
     fd = s.founded_date

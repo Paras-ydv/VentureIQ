@@ -384,7 +384,7 @@ export default function StartupDetail() {
                 </span>
               )}
               <span>{stageLabel(s.stage)}</span>
-              {s.founded_date && <span>Founded {s.founded_date.slice(0, 4)}</span>}
+              {s.founded_date ? <span>Founded {s.founded_date.slice(0, 4)}</span> : s.yc_batch ? <span>YC {s.yc_batch}</span> : null}
               {s.employee_count ? <span>{compactNum(s.employee_count)} employees</span> : null}
               {s.website && (
                 <a href={s.website} target="_blank" rel="noreferrer noopener" className="font-semibold text-brand-text hover:underline">
@@ -713,6 +713,7 @@ export default function StartupDetail() {
               <KV k="Stage">{stageLabel(s.stage)}</KV>
               <KV k="Headquarters">{[s.hq_city, s.hq_state].filter(Boolean).join(", ") || "—"}</KV>
               <KV k="Founded">{s.founded_date?.slice(0, 4) ?? "—"}</KV>
+              {s.yc_batch && <KV k="Y Combinator batch">{s.yc_batch}</KV>}
               <KV k="CIN">{s.cin ? <span className="tnum text-[12.5px]">{s.cin}</span> : "Not on record"}</KV>
               <KV k="Peer cohort">{score?.cohort_size ? `${score.cohort_size} companies` : "—"}</KV>
               <KV k="Record source">{SOURCE_LABEL[s.source] ?? s.source.replace(/_/g, " ")}</KV>

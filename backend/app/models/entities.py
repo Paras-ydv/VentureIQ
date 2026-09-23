@@ -56,6 +56,12 @@ class Startup(Base):
     sub_vertical: Mapped[str | None] = mapped_column(String(160))
 
     founded_date: Mapped[datetime | None] = mapped_column(Date)
+    # The Y Combinator directory gives an accelerator batch ("Winter 2022") and
+    # no founding year. Storing the batch year as `founded_date` said BharatX
+    # was founded in 2022 when it was founded in 2019, and the interface
+    # presented that as verified. The batch is kept here as what it is, and
+    # `founded_date` stays empty for these companies until a source gives one.
+    yc_batch: Mapped[str | None] = mapped_column(String(32))
     hq_city: Mapped[str | None] = mapped_column(String(96), index=True)
     hq_state: Mapped[str | None] = mapped_column(String(96))
     registered_address: Mapped[str | None] = mapped_column(Text)
