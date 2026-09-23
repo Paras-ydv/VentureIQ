@@ -9,6 +9,7 @@ import {
 import { lazy, Suspense, useEffect } from "react";
 import { LazyMotion, m } from "motion/react";
 import { Shell } from "./components/Shell";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ToastProvider } from "./components/ui/Toast";
 import { AuthProvider, useAuth } from "./lib/auth";
 import { InvestorProvider } from "./lib/investor-context";
@@ -33,6 +34,7 @@ const Login = lazy(() => import("./pages/Login"));
 const AuthCallback = lazy(() => import("./pages/AuthCallback"));
 const Saved = lazy(() => import("./pages/Saved"));
 const MyCompanies = lazy(() => import("./pages/MyCompanies"));
+const Reviews = lazy(() => import("./pages/Reviews"));
 const Account = lazy(() => import("./pages/Account"));
 const Marketplace = lazy(() => import("./pages/Marketplace"));
 const Onboarding = lazy(() => import("./pages/Onboarding"));
@@ -80,11 +82,16 @@ function RouteFade() {
 }
 
 function AppLayout() {
+  const { pathname } = useLocation();
   return (
     <Shell>
-      <Suspense fallback={<PageFallback />}>
-        <RouteFade />
-      </Suspense>
+      {/* Keyed by route so a failed page recovers on the next navigation
+          instead of staying broken for the rest of the session. */}
+      <ErrorBoundary key={pathname} label={pathname}>
+        <Suspense fallback={<PageFallback />}>
+          <RouteFade />
+        </Suspense>
+      </ErrorBoundary>
     </Shell>
   );
 }
@@ -111,11 +118,13 @@ export default function App() {
                 <Route
                   path="/"
                   element={
-                    <Suspense
-                      fallback={<div className="min-h-screen bg-plane" />}
-                    >
-                      <Landing />
-                    </Suspense>
+                    <ErrorBoundary label="landing">
+                      <Suspense
+                        fallback={<div className="min-h-screen bg-plane" />}
+                      >
+                        <Landing />
+                      </Suspense>
+                    </ErrorBoundary>
                   }
                 />
                 <Route element={<AppLayout />}>
@@ -128,6 +137,7 @@ export default function App() {
                   <Route path="/register" element={<Register />} />
                   <Route path="/saved" element={<RequireAuth><Saved /></RequireAuth>} />
                   <Route path="/my-companies" element={<RequireAuth><MyCompanies /></RequireAuth>} />
+                  <Route path="/reviews" element={<RequireAuth><Reviews /></RequireAuth>} />
                   <Route path="/account" element={<RequireAuth><Account /></RequireAuth>} />
                   <Route path="/marketplace" element={<Marketplace />} />
                   <Route path="/submit" element={<Submit />} />

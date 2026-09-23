@@ -24,7 +24,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
-from app.api.deps import current_user
+from app.api.deps import current_user, is_reviewer, reviewer_user
 from app.api.routes.documents import _read_and_extract, _store
 from app.core.database import get_db
 from app.models import AuditLog, Investor, KycCase, User
@@ -36,14 +36,6 @@ PAN_RE = re.compile(r"^[A-Z]{5}\d{4}[A-Z]$")
 PAN_HOLDER = {"C": "Company", "P": "Individual", "F": "Firm / LLP", "H": "HUF", "A": "AOP",
               "T": "Trust", "B": "BOI", "L": "Local authority", "J": "Artificial juridical person",
               "G": "Government"}
-# Who may sign off a case. A real deployment puts a compliance team here.
-REVIEWER_EMAILS = {"compliance@ventureiq.local"}
-
-
-def _is_reviewer(user: User) -> bool:
-    return user.role == "admin" or user.email in REVIEWER_EMAILS
-
-
 def _case_out(case: KycCase) -> dict[str, Any]:
     return {
         "case_id": case.case_id,
@@ -193,9 +185,7 @@ def my_case(db: Session = Depends(get_db), user: User = Depends(current_user)):
 
 
 @router.get("/queue")
-def queue(db: Session = Depends(get_db), user: User = Depends(current_user)):
-    if not _is_reviewer(user):
-        raise HTTPException(403, "Only a reviewer can see the KYC queue")
+def queue(db: Session = Depends(get_db), user: User = Depends(reviewer_user)):
     cases = (
         db.query(KycCase)
         .filter(KycCase.status.in_(["passed_checks", "failed_checks"]))
@@ -203,7 +193,22 @@ def queue(db: Session = Depends(get_db), user: User = Depends(current_user)):
         .limit(100)
         .all()
     )
-    return [_case_out(c) for c in cases]
+    # A reviewer is deciding about a person, so the queue names them.
+    people = {
+        u.user_id: u
+        for u in db.query(User).filter(User.user_id.in_([c.user_id for c in cases])).all()
+    } if cases else {}
+    out = []
+    for case in cases:
+        person = people.get(case.user_id)
+        out.append({
+            **_case_out(case),
+            "submitted_by": {
+                "name": person.name if person else None,
+                "email": person.email if person else None,
+            },
+        })
+    return out
 
 
 @router.post("/{case_id}/decide")
@@ -212,10 +217,8 @@ def decide(
     approve: bool,
     note: str | None = None,
     db: Session = Depends(get_db),
-    user: User = Depends(current_user),
+    user: User = Depends(reviewer_user),
 ):
-    if not _is_reviewer(user):
-        raise HTTPException(403, "Only a reviewer can decide a KYC case")
     case = db.get(KycCase, case_id)
     if not case:
         raise HTTPException(404, "No such case")

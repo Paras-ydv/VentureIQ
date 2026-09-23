@@ -49,3 +49,18 @@ def owns_investor(investor_id: str, user: User) -> None:
     """Investors may only read and write their own profile and feed."""
     if user.investor_id != investor_id:
         raise HTTPException(403, "That investor profile belongs to someone else")
+
+
+# Who may sign off a KYC case. A real deployment puts a compliance team here,
+# or an identity provider; this stands in for one and is audited either way.
+REVIEWER_EMAILS = {"compliance@ventureiq.local"}
+
+
+def is_reviewer(user: User) -> bool:
+    return user.role == "admin" or user.email in REVIEWER_EMAILS
+
+
+def reviewer_user(user: User = Depends(current_user)) -> User:
+    if not is_reviewer(user):
+        raise HTTPException(403, "Only a compliance reviewer can do that")
+    return user

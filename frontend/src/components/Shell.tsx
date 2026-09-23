@@ -39,6 +39,12 @@ const Icon = {
       <path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
     </>
   ),
+  shield: (
+    <>
+      <path d="M12 3l8 3v6c0 4.4-3.1 7.9-8 9-4.9-1.1-8-4.6-8-9V6l8-3z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+      <path d="M9 12l2 2 4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </>
+  ),
 };
 
 const svg = (d: ReactNode) => (
@@ -75,16 +81,22 @@ export function Logo({ size = 28, to = "/" }: { size?: number; to?: string }) {
   );
 }
 
+// Only a compliance reviewer sees the KYC queue; the API enforces it too.
+const REVIEW_ENTRY: NavEntry = { to: "/reviews", label: "KYC queue", icon: svg(Icon.shield) };
+
 function useNav(): NavEntry[] {
   const { user } = useAuth();
-  if (user?.role !== "founder") return NAV;
-  // Founders live in their own companies, not an investor deal feed.
-  return [
-    { to: "/my-companies", label: "My companies", icon: svg(Icon.bookmark), end: true },
-    NAV[1],
-    NAV[5],
-    NAV[6],
-  ];
+  const base =
+    user?.role === "founder"
+      ? // Founders live in their own companies, not an investor deal feed.
+        [
+          { to: "/my-companies", label: "My companies", icon: svg(Icon.bookmark), end: true },
+          NAV[1],
+          NAV[5],
+          NAV[6],
+        ]
+      : NAV;
+  return user?.is_reviewer ? [...base, REVIEW_ENTRY] : base;
 }
 
 function NavList({
@@ -279,6 +291,9 @@ function AccountMenu() {
                 <MenuLink to="/my-companies" onClick={() => setOpen(false)}>My companies</MenuLink>
                 <MenuLink to="/register" onClick={() => setOpen(false)}>Register a company</MenuLink>
               </>
+            )}
+            {user.is_reviewer && (
+              <MenuLink to="/reviews" onClick={() => setOpen(false)}>KYC review queue</MenuLink>
             )}
             <MenuLink to="/account" onClick={() => setOpen(false)}>Account &amp; KYC</MenuLink>
             <button

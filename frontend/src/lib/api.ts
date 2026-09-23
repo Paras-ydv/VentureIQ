@@ -357,6 +357,8 @@ export interface AuthUser {
   investor_name: string | null;
   kyc_status: string | null;
   has_mandate: boolean;
+  /** May act on the KYC queue; the API checks this again on every call. */
+  is_reviewer?: boolean;
   watchlist_count: number;
   created_at: string;
 }
@@ -625,7 +627,10 @@ export const api = {
     if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail ?? `${res.status}`);
     return (await res.json()) as KycCase;
   },
-  kycQueue: () => request<KycCase[]>("/kyc/queue"),
+  kycQueue: () =>
+    request<(KycCase & { submitted_by?: { name: string | null; email: string | null } })[]>(
+      "/kyc/queue",
+    ),
   kycDecide: (caseId: string, approve: boolean, note?: string) =>
     request<KycCase>(`/kyc/${caseId}/decide?approve=${approve}${note ? `&note=${encodeURIComponent(note)}` : ""}`, {
       method: "POST",

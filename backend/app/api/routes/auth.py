@@ -15,13 +15,21 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session, selectinload
 
-from app.api.deps import current_user
+from app.api.deps import current_user, is_reviewer
 from app.core.database import get_db
-from app.core.security import MAX_PASSWORD_BYTES, create_access_token, hash_password, verify_password
+from app.core.security import (
+    MAX_PASSWORD_BYTES,
+    clear_failed_logins,
+    create_access_token,
+    hash_password,
+    login_blocked,
+    record_failed_login,
+    verify_password,
+)
 from app.models import AuditLog, BehavioralEvent, Investor, InvestorPreference, Startup, User, WatchlistItem
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -84,6 +92,9 @@ def _user_out(db: Session, user: User) -> dict[str, Any]:
         "investor_name": investor.name if investor else None,
         "kyc_status": investor.kyc_status if investor else None,
         "has_mandate": bool(investor and investor.preference),
+        # Lets the UI offer the KYC queue only to whoever may act on it; the
+        # endpoints check this again themselves.
+        "is_reviewer": is_reviewer(user),
         "watchlist_count": db.query(WatchlistItem).filter(WatchlistItem.user_id == user.user_id).count(),
         "created_at": user.created_at,
     }
@@ -137,13 +148,26 @@ def register(payload: RegisterIn, db: Session = Depends(get_db)):
 
 
 @router.post("/login")
-def login(payload: LoginIn, db: Session = Depends(get_db)):
+def login(payload: LoginIn, request: Request, db: Session = Depends(get_db)):
+    # Throttle by account and by caller, so neither one account nor one client
+    # can be used to guess passwords indefinitely.
+    keys = (f"email:{payload.email}", f"ip:{request.client.host if request.client else '-'}")
+    wait = login_blocked(*keys)
+    if wait:
+        raise HTTPException(
+            429,
+            "Too many sign-in attempts. Try again shortly.",
+            headers={"Retry-After": str(wait)},
+        )
+
     user = db.query(User).filter(User.email == payload.email).first()
     # Same message either way: do not reveal which accounts exist.
     if not user or not user.password_hash or not verify_password(payload.password, user.password_hash):
+        record_failed_login(*keys)
         raise HTTPException(401, "Email or password is incorrect")
     if not user.is_active:
         raise HTTPException(403, "This account is disabled")
+    clear_failed_logins(*keys)
     user.last_login_at = datetime.now(UTC).replace(tzinfo=None)
     db.commit()
     db.refresh(user)
