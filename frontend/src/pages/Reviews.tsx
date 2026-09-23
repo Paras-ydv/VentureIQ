@@ -80,21 +80,21 @@ function CaseCard({ item, onDecide }: { item: KycCase & { submitted_by?: { name:
 
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <input
-            className="input min-w-0 flex-1"
+            className="field h-11 min-w-0 flex-1"
             placeholder="Note for the audit log (optional)"
             value={note}
             maxLength={500}
             onChange={(e) => setNote(e.target.value)}
           />
           <button
-            className="btn btn-primary"
+            className="btn btn-primary h-11"
             disabled={busy !== null}
             onClick={() => decide(true)}
           >
             {busy === "approve" ? "Approving…" : "Approve"}
           </button>
           <button
-            className="btn btn-ghost"
+            className="btn h-11"
             disabled={busy !== null}
             onClick={() => decide(false)}
           >
