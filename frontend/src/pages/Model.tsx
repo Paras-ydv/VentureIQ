@@ -160,6 +160,41 @@ export default function Model() {
         </Card>
 
         <Card className="p-5">
+          <SectionHeader
+            eyebrow="Explainability"
+            title="How a score is explained"
+            description="Four scores, two mechanisms — because they are four different kinds of model."
+          />
+          <dl className="space-y-3 text-[12.5px]">
+            <div>
+              <dt className="mb-0.5 text-ink-muted">Growth potential · fraud likelihood</dt>
+              <dd className="leading-relaxed text-ink-secondary">
+                Both are tree ensembles, so both get exact Shapley values from{" "}
+                <code className="text-[11.5px]">shap.TreeExplainer</code> — no sampling and no
+                surrogate model. The description's 96 latent dimensions are summed back into one
+                feature, since a single latent dimension means nothing to a reader.
+              </dd>
+            </div>
+            <div>
+              <dt className="mb-0.5 text-ink-muted">Risk level · founder credibility</dt>
+              <dd className="leading-relaxed text-ink-secondary">
+                Additive rule compositions. Each term already is its own explanation, so they are
+                reported directly rather than approximated by a second model.
+              </dd>
+            </div>
+            <div>
+              <dt className="mb-0.5 text-ink-muted">The honest caveat</dt>
+              <dd className="leading-relaxed text-ink-secondary">
+                Shapley values are additive in the model's own units — log-odds for the classifier,
+                isolation path length for the anomaly detector — not in the 0–100 points on screen.
+                Each contribution is that feature's share of the model's total move, converted to
+                points. Every attribution names the mechanism that produced it.
+              </dd>
+            </div>
+          </dl>
+        </Card>
+
+        <Card className="p-5">
           <SectionHeader eyebrow="Known limitations" title="What this model cannot tell you" />
           <div
             className="rounded-lg border p-3.5 mb-3"
