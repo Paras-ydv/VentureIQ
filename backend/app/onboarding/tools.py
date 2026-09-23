@@ -223,6 +223,22 @@ def _first(v: Any) -> Any:
     return v[0] if isinstance(v, list) and v else v
 
 
+def _looks_like_company_name(text: str, label: str) -> bool:
+    """Is this a company's name, or the sentence its marketing team wrote?
+
+    superops.ai titles its homepage "Autonomous IT operations platform for MSP
+    and IT teams". Under 60 characters, so a length check alone let it through,
+    and the agent then offered to rename the company to it. A name either looks
+    like the domain, or is a couple of words that do not read as a sentence.
+    """
+    t = text.strip()
+    if not t or len(t) > 60:
+        return False
+    if checks.compare("name", t, label) == "agree":
+        return True
+    return len(t.split()) <= 4 and not t.endswith((".", "!", "?"))
+
+
 def _name_from_title(title: str, domain: str) -> str | None:
     parts = [p.strip() for p in re.split(r"\s[|–—\-:·]\s|\s[|·]\s?", title) if p.strip()]
     if not parts:
@@ -230,7 +246,7 @@ def _name_from_title(title: str, domain: str) -> str | None:
     label = domain.split(".")[0]
     scored = sorted(parts, key=lambda p: (checks.compare("name", p, label) != "agree", len(p)))
     best = scored[0]
-    return best if len(best) <= 60 else None
+    return best if _looks_like_company_name(best, label) else None
 
 
 def _profile_links(links: list[str], base: str) -> dict[str, str]:
@@ -305,6 +321,9 @@ async def website(ctx: Run, args: dict) -> dict:
         head = re.split(r"[.|–—:·]\s+|\s[-|]\s", site_name.strip())[0].strip()
         if head and head != site_name and checks.compare("name", head, final_domain.split(".")[0]) == "agree":
             site_name = head
+        # og:site_name is as free-form as the title, so hold it to the same bar.
+        if not _looks_like_company_name(site_name, final_domain.split(".")[0]):
+            site_name = None
     if site_name:
         ctx.find("legal_name", "website", site_name.strip(), note="Page title / og:site_name")
     desc = parser.meta.get("description") or parser.meta.get("og:description")
