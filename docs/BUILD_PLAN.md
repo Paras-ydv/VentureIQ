@@ -139,6 +139,27 @@ write-up that "explainability" means a per-model-appropriate top-3-features text
 summary, not one shared mechanism — that's a more defensible (and more accurate)
 claim than implying a single SHAP pipeline handles all four heterogeneous scores.
 
+**Built** (`backend/app/ml/explain.py`): the mitigation held, and it turned out
+better than expected — both trained models are tree ensembles (gradient boosting
+for growth, isolation forest for fraud), so both get *exact* Shapley values from
+`TreeExplainer` rather than a sampled approximation. Two things the write-up must
+still say plainly:
+
+- The remaining two scores, risk and founder credibility, have no model to
+  explain. They are additive rule compositions whose terms already are the
+  explanation, and they report those terms instead. Four scores, two mechanisms;
+  every attribution carries a `method` field naming which one produced it.
+- Shapley values are additive in the model's own output — log-odds for the
+  classifier, isolation path length for the anomaly detector — not in the 0–100
+  points the interface draws. Each contribution is that feature's share of the
+  model's total move away from its base rate, rescaled to points. Exact in
+  aggregate, monotone per feature, and **not** itself a Shapley value in score
+  space. Claiming otherwise is the kind of thing a reviewer will ask about.
+
+Cost worth knowing before deploying: `shap` pulls in numba, ~200 MB resident on
+first use. It sits behind `VIQ_ENABLE_SHAP` so a small instance can run without
+it (scores still compute; they just report the prediction undecomposed).
+
 ### Problem 7 — Evaluating "did this recommendation/score turn out to be right?" takes years
 Startup success/failure resolves on a multi-year timescale; a one-semester (or even
 one-year) dissertation project cannot show real-world validation of its own
