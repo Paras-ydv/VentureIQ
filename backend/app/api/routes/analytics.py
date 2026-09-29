@@ -216,7 +216,14 @@ def model_metrics():
     path = ARTIFACTS / "growth_metrics.json"
     if not path.exists():
         raise HTTPException(404, "Model not trained yet — run python -m app.ml.train")
-    return json.loads(path.read_text())
+    payload = json.loads(path.read_text())
+
+    # The survival model is a separate model on a separate corpus, so it is
+    # reported separately rather than folded into the growth numbers.
+    survival_path = ARTIFACTS / "survival_metrics.json"
+    if survival_path.exists():
+        payload["survival"] = json.loads(survival_path.read_text())
+    return payload
 
 
 @router.get("/alerts")

@@ -284,8 +284,55 @@ def _score_risk(s: Startup, cohort_stats: dict | None = None) -> tuple[float, li
             }
         )
 
+    # The register's own verdict on companies that look like this one. Only
+    # available for a company we actually matched in the MCA registry, which
+    # means a real Indian entity with a CIN --- so it stays a bonus signal, not
+    # a requirement, and the rule-based terms above stand on their own.
+    method = "rule_additive"
+    survival_adj = _survival_signal(s)
+    if survival_adj:
+        method = "rules+model:survival"
+        base += survival_adj["contribution"]
+        contributions.append(survival_adj)
+
     contributions.sort(key=lambda c: abs(c["contribution"]), reverse=True)
-    return _clamp(base), contributions[:3], "rule_additive"
+    return _clamp(base), contributions[:3], method
+
+
+def _survival_signal(s: Startup) -> dict | None:
+    """Dissolution risk from the MCA-trained model, as a safety adjustment."""
+    if not s.cin:
+        return None
+    try:
+        from app.ml import survival
+        from app.registry import store as registry
+
+        if survival.bundle() is None:
+            return None
+        record = registry.get_local(s.cin)
+        if not record:
+            return None
+        proba = survival.predict(record)
+        if proba is None:
+            return None
+    except Exception:
+        return None
+
+    # The population base rate is ~27.5%. Sitting on it is neutral; the swing
+    # is capped so one model cannot dominate a score built from several signals.
+    adj = _clamp((0.275 - proba) * 40.0, -14, 10)
+    if abs(adj) < 0.5:
+        return None
+    return {
+        "feature": "registry_survival",
+        "value": round(proba, 4),
+        "contribution": round(adj, 2),
+        "direction": "positive" if adj > 0 else "negative",
+        "label": (
+            f"{proba:.0%} of companies with this profile on the MCA register have been "
+            f"struck off or dissolved (population average 27%)"
+        ),
+    }
 
 
 # --------------------------------------------------------------------------
