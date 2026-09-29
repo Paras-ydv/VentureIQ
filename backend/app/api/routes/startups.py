@@ -356,6 +356,68 @@ def get_benchmark(startup_id: str, db: Session = Depends(get_db)):
     return rag.benchmark(db, s)
 
 
+@router.get("/{startup_id}/competitors")
+def competitors(startup_id: str, k: int = Query(8, ge=1, le=20), db: Session = Depends(get_db)):
+    """The company set side by side with its nearest comparable companies.
+
+    The peer list is the same retrieval the benchmark uses; what this adds is
+    the numbers lined up in one shape, plus the median of the set, so a reader
+    can see where the company sits rather than reading eight profiles. Medians,
+    not means: one company that raised $2bn would otherwise drag the row.
+    """
+    s = db.query(Startup).filter(Startup.startup_id == startup_id).first()
+    if not s:
+        raise HTTPException(404, "Startup not found")
+
+    pairs = rag.INDEX.retrieve(db, s, k=k, strict=False)
+    similarity = {sid: score for sid, score in pairs}
+    rows = (
+        db.query(Startup)
+        .options(selectinload(Startup.scores), selectinload(Startup.financials))
+        .filter(Startup.startup_id.in_(list(similarity)))
+        .all()
+        if similarity
+        else []
+    )
+    rows.sort(key=lambda r: -similarity.get(r.startup_id, 0.0))
+
+    def row(x: Startup, sim: float | None) -> dict[str, Any]:
+        fin = x.latest_financials
+        score = x.latest_score
+        return {
+            **_summary(x),
+            "similarity": round(sim, 4) if sim is not None else None,
+            "founded_year": x.founded_date.year if x.founded_date else None,
+            "yc_batch": x.yc_batch,
+            "revenue": fin.revenue if fin else None,
+            "runway_months": fin.runway_months if fin else None,
+            "growth_potential_score": score.growth_potential_score if score else None,
+            "risk_level_score": score.risk_level_score if score else None,
+        }
+
+    peers = [row(x, similarity.get(x.startup_id)) for x in rows]
+
+    def median(key: str) -> float | None:
+        values = sorted(p[key] for p in peers if p.get(key) is not None)
+        if not values:
+            return None
+        mid = len(values) // 2
+        return float(values[mid] if len(values) % 2 else (values[mid - 1] + values[mid]) / 2)
+
+    return {
+        "subject": row(s, None),
+        "peers": peers,
+        "median": {k2: median(k2) for k2 in (
+            "total_funding_usd", "employee_count", "composite_score",
+            "growth_potential_score", "risk_level_score", "revenue",
+        )},
+        "basis": (
+            f"Nearest {len(peers)} companies by description, stage and sector, "
+            "from the 9,287-company corpus."
+        ),
+    }
+
+
 @router.get("/{startup_id}/similar", response_model=list[StartupSummary])
 def similar(startup_id: str, k: int = Query(6, ge=1, le=20), db: Session = Depends(get_db)):
     s = db.query(Startup).filter(Startup.startup_id == startup_id).first()

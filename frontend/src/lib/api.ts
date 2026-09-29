@@ -211,6 +211,21 @@ export interface Investor {
   } | null;
 }
 
+export interface CompetitorRow extends StartupSummary {
+  similarity: number | null;
+  founded_year: number | null;
+  yc_batch: string | null;
+  revenue: number | null;
+  runway_months: number | null;
+}
+
+export interface CompetitorSet {
+  subject: CompetitorRow;
+  peers: CompetitorRow[];
+  median: Record<string, number | null>;
+  basis: string;
+}
+
 export interface MentorOffer {
   offer_id: string;
   startup_id: string;
@@ -659,6 +674,7 @@ export const api = {
       method: "POST",
     }),
 
+  competitors: (id: string, k = 8) => request<CompetitorSet>(`/startups/${id}/competitors?k=${k}`),
   mentorFocusAreas: () => request<{ focus_areas: string[] }>("/mentorship/focus-areas"),
   mentorsOf: (startupId: string) =>
     request<{ mentors: MentorOffer[]; my_offer: MentorOffer | null }>(

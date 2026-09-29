@@ -29,6 +29,7 @@ import {
 } from "../components/primitives";
 import { useInvestor } from "../lib/investor-context";
 import { MentorsPanel } from "../components/Mentorship";
+import Competitors from "../components/Competitors";
 
 const DIMENSIONS = [
   { key: "growth_potential", label: "Growth potential", scoreKey: "growth_potential_score" },
@@ -849,6 +850,7 @@ export default function StartupDetail() {
 
       {/* ───────────────────────── peers ───────────────────────── */}
       <div id="peers" className="scroll-mt-24 space-y-5">
+        <Competitors startupId={s.startup_id} />
         {benchErr && (
           <Card className="p-5">
             <SectionHeader title="Peer comparison" />
