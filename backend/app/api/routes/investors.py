@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import or_
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.routes.startups import _summary
@@ -13,6 +14,52 @@ from app.models import AuditLog, BehavioralEvent, Investor, InvestorPreference, 
 from app.schemas.dto import EventIn, InvestorIn, InvestorOut, MatchOut
 
 router = APIRouter(prefix="/api/investors", tags=["investors"])
+
+
+@router.get("/mandate/preview")
+def mandate_preview(
+    sectors: list[str] = Query(default_factory=list),
+    stages: list[str] = Query(default_factory=list),
+    cities: list[str] = Query(default_factory=list),
+    db: Session = Depends(get_db),
+):
+    """How many companies a mandate would actually reach, right now.
+
+    Onboarding otherwise asks an investor to fill a form and trust that
+    something useful comes out of it. Counting the corpus against their
+    choices as they make them turns the form into a dial they can see moving,
+    and it is the same corpus the feed ranks over --- not an illustration.
+    """
+    from app.models import Score, Startup
+
+    q = (
+        db.query(Startup)
+        .join(Score, (Score.startup_id == Startup.startup_id) & Score.is_current.is_(True))
+    )
+    if sectors:
+        q = q.filter(Startup.sector.in_(sectors))
+    if stages:
+        q = q.filter(Startup.stage.in_(stages))
+    if cities:
+        # Geography is stored as a city, and investors think in cities here.
+        q = q.filter(or_(*[Startup.hq_city.ilike(f"%{c}%") for c in cities]))
+
+    total = q.distinct().count()
+    sample = (
+        q.order_by(Score.composite_score.desc())
+        .distinct()
+        .limit(3)
+        .all()
+    )
+    return {
+        "matches": total,
+        "sample": [
+            {"startup_id": s.startup_id, "legal_name": s.legal_name, "sector": s.sector,
+             "hq_city": s.hq_city, "composite_score": (s.latest_score.composite_score
+                                                       if s.latest_score else None)}
+            for s in sample
+        ],
+    }
 
 
 @router.get("", response_model=list[InvestorOut])

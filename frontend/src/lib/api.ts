@@ -674,6 +674,16 @@ export const api = {
       method: "POST",
     }),
 
+  mandatePreview: (q: { sectors: string[]; stages: string[]; cities: string[] }) => {
+    const p = new URLSearchParams();
+    q.sectors.forEach((s) => p.append("sectors", s));
+    q.stages.forEach((s) => p.append("stages", s));
+    q.cities.forEach((c) => p.append("cities", c));
+    return request<{
+      matches: number;
+      sample: { startup_id: string; legal_name: string; sector: string; hq_city: string | null; composite_score: number | null }[];
+    }>(`/investors/mandate/preview?${p.toString()}`);
+  },
   competitors: (id: string, k = 8) => request<CompetitorSet>(`/startups/${id}/competitors?k=${k}`),
   mentorFocusAreas: () => request<{ focus_areas: string[] }>("/mentorship/focus-areas"),
   mentorsOf: (startupId: string) =>
