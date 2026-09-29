@@ -31,6 +31,7 @@ def _summary(s: Startup) -> dict[str, Any]:
     return {
         "startup_id": s.startup_id,
         "legal_name": s.legal_name,
+        "logo_url": s.logo_url,
         "stage": s.stage,
         "sector": s.sector,
         "sub_vertical": s.sub_vertical,
@@ -185,6 +186,10 @@ def get_startup(
             "hq_state": s.hq_state,
             "founded_date": s.founded_date,
             "yc_batch": s.yc_batch,
+            "logo_source": s.logo_source,
+            "company_linkedin_url": s.linkedin_url,
+            "company_twitter_url": s.twitter_url,
+            "company_github_org": s.github_org,
             # Whether the viewer owns this company, so the page can offer the
             # founder's actions. The owner's identity itself stays private.
             "owned_by_me": bool(user and s.owner_user_id and s.owner_user_id == user.user_id),

@@ -211,6 +211,7 @@ def _item_out(item: WatchlistItem) -> dict[str, Any]:
         "startup": {
             "startup_id": s.startup_id,
             "legal_name": s.legal_name,
+            "logo_url": s.logo_url,
             "sector": s.sector,
             "stage": s.stage,
             "hq_city": s.hq_city,

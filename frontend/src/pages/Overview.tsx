@@ -288,7 +288,7 @@ export default function Overview() {
                         onClick={() => track("view", m.startup.startup_id)}
                         className="flex items-center gap-3 px-4 py-3"
                       >
-                        <LogoTile name={m.startup.legal_name} size={36} />
+                        <LogoTile name={m.startup.legal_name} src={m.startup.logo_url} size={36} />
                         <span className="min-w-0 flex-1">
                           <span className="flex items-center gap-1.5">
                             <span className="truncate text-[14px] font-bold">{m.startup.legal_name}</span>
@@ -336,7 +336,7 @@ export default function Overview() {
                               onClick={() => track("view", m.startup.startup_id)}
                               className="flex min-w-0 items-center gap-3"
                             >
-                              <LogoTile name={m.startup.legal_name} size={34} />
+                              <LogoTile name={m.startup.legal_name} src={m.startup.logo_url} size={34} />
                               <span className="min-w-0">
                                 <span className="flex items-center gap-1.5">
                                   <span className="max-w-[200px] truncate font-bold text-ink hover:text-brand-text">

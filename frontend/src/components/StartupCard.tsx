@@ -59,7 +59,7 @@ export function StartupCard({
       className="card card-lit interactive group flex h-full min-w-0 flex-col gap-3.5 p-5"
     >
       <div className="flex min-w-0 items-start gap-3">
-        <LogoTile name={s.legal_name} size={42} />
+        <LogoTile name={s.legal_name} src={s.logo_url} size={42} />
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-1.5">
             <h3 className="truncate text-[15.5px] font-bold tracking-tight text-ink transition-colors group-hover:text-brand-text">

@@ -62,6 +62,15 @@ class Startup(Base):
     # presented that as verified. The batch is kept here as what it is, and
     # `founded_date` stays empty for these companies until a source gives one.
     yc_batch: Mapped[str | None] = mapped_column(String(32))
+    # The company's own mark, from a source that actually publishes one: the YC
+    # directory for YC companies, or the company's own site. Never generated,
+    # so a missing logo stays missing and the initials tile stands in.
+    logo_url: Mapped[str | None] = mapped_column(String(512))
+    logo_source: Mapped[str | None] = mapped_column(String(48))
+    linkedin_url: Mapped[str | None] = mapped_column(String(512))
+    twitter_url: Mapped[str | None] = mapped_column(String(512))
+    github_org: Mapped[str | None] = mapped_column(String(96))
+    profile_source: Mapped[str | None] = mapped_column(String(48))
     hq_city: Mapped[str | None] = mapped_column(String(96), index=True)
     hq_state: Mapped[str | None] = mapped_column(String(96))
     registered_address: Mapped[str | None] = mapped_column(Text)
@@ -179,6 +188,10 @@ class Founder(Base):
     github_contributor_count: Mapped[int | None] = mapped_column(Integer)
     github_followers: Mapped[int | None] = mapped_column(Integer)
     linkedin_endorsement_count: Mapped[int | None] = mapped_column(Integer)
+    # Where the NAME came from. "modelled" means we never collected this
+    # person and the row is a placeholder carrying synthetic signals; anything
+    # else names a real source, and only those are shown as real people.
+    name_source: Mapped[str | None] = mapped_column(String(48))
 
     startup: Mapped[Startup] = relationship(back_populates="founders")
 

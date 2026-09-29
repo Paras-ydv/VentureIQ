@@ -99,6 +99,7 @@ class FounderOut(BaseModel):
 
     founder_id: str
     name: str
+    name_source: str | None = None
     role: str | None = None
     linkedin_url: str | None = None
     github_username: str | None = None
@@ -179,6 +180,7 @@ class StartupSummary(BaseModel):
 
     startup_id: str
     legal_name: str
+    logo_url: str | None = None
     stage: str
     sector: str
     sub_vertical: str | None = None
@@ -203,6 +205,10 @@ class StartupDetail(StartupSummary):
     founded_date: date | None = None
     yc_batch: str | None = None
     owned_by_me: bool = False
+    logo_source: str | None = None
+    company_linkedin_url: str | None = None
+    company_twitter_url: str | None = None
+    company_github_org: str | None = None
     cin: str | None = None
     gstin: str | None = None
     created_at: datetime

@@ -167,7 +167,7 @@ export default function Competitors({ startupId }: { startupId: string }) {
                     }`}
                   >
                     <div className="flex items-center gap-2.5">
-                      {!isMedian && <LogoTile name={row.legal_name} size={26} />}
+                      {!isMedian && <LogoTile name={row.legal_name} src={row.logo_url} size={26} />}
                       <div className="min-w-0">
                         {isMedian ? (
                           <span className="text-[13px] font-semibold italic text-ink-muted">

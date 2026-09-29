@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { fraudBand, scoreBand } from "../lib/format";
@@ -191,9 +192,37 @@ export function CheckIcon({ size = 12 }: { size?: number }) {
 /** Deterministic initial-letter logo, so the same company always gets the
  *  same tile. Colour is decoration only; the name carries identity. */
 const TILE_COLORS = ["#1463ff", "#0b1b36", "#0e7c86", "#5b4bc4", "#1d4ed8", "#0f5c6e"];
-export function LogoTile({ name, size = 34 }: { name: string; size?: number }) {
+export function LogoTile({
+  name,
+  size = 34,
+  src,
+}: {
+  name: string;
+  size?: number;
+  /** The company's real logo, when we actually have one. Anything that fails
+   *  to load falls back to the initials tile rather than a broken image. */
+  src?: string | null;
+}) {
+  const [failed, setFailed] = useState(false);
   let h = 0;
   for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  const radius = Math.round(size * 0.24);
+
+  if (src && !failed) {
+    return (
+      <img
+        src={src}
+        alt=""
+        aria-hidden
+        loading="lazy"
+        width={size}
+        height={size}
+        onError={() => setFailed(true)}
+        className="shrink-0 border border-line bg-surface object-contain"
+        style={{ width: size, height: size, borderRadius: radius }}
+      />
+    );
+  }
   return (
     <span
       className="logo-tile"
@@ -201,7 +230,7 @@ export function LogoTile({ name, size = 34 }: { name: string; size?: number }) {
       style={{
         width: size,
         height: size,
-        borderRadius: Math.round(size * 0.24),
+        borderRadius: radius,
         fontSize: Math.round(size * 0.42),
         backgroundColor: TILE_COLORS[h % TILE_COLORS.length],
       }}

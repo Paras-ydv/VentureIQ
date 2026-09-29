@@ -137,7 +137,7 @@ export default function Saved() {
                   className="card card-lit p-4 sm:p-5"
                 >
                   <div className="flex flex-wrap items-start gap-4">
-                    <LogoTile name={s?.legal_name ?? "?"} size={40} />
+                    <LogoTile name={s?.legal_name ?? "?"} src={s?.logo_url} size={40} />
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <Link to={`/startup/${item.startup_id}`} className="truncate text-[16px] font-bold hover:text-brand-text">

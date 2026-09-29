@@ -340,6 +340,10 @@ export default function StartupDetail() {
   // public dataset, and everything except its funding total is modelled.
   // A registration is the company's own submission, so it is described as such.
   const isSeeded = s.source.startsWith("seed");
+  // Some corpus companies now carry the real founder names their source
+  // dataset published; only the rest get the placeholder caption.
+  const foundersAreModelled =
+    s.founders.length > 0 && s.founders.every((f) => (f.name_source ?? "modelled") === "modelled");
   const attribution = score?.shap_top_features?.[activeDim];
   const gstGap =
     fin?.revenue && fin?.gst_reported_revenue
@@ -364,7 +368,7 @@ export default function StartupDetail() {
       {/* ───────────────────────── profile header ───────────────────────── */}
       <Card className="overflow-hidden">
         <div className="flex flex-col gap-5 p-5 sm:p-7 lg:flex-row lg:items-start">
-          <LogoTile name={s.legal_name} size={84} />
+          <LogoTile name={s.legal_name} src={s.logo_url} size={84} />
           <div className="min-w-0 flex-1 space-y-2.5">
             <div className="flex flex-wrap items-center gap-2.5">
               <h1 className="text-[28px] font-extrabold leading-tight tracking-tight sm:text-[32px]">{s.legal_name}</h1>
@@ -388,6 +392,26 @@ export default function StartupDetail() {
               <span>{stageLabel(s.stage)}</span>
               {s.founded_date ? <span>Founded {s.founded_date.slice(0, 4)}</span> : s.yc_batch ? <span>YC {s.yc_batch}</span> : null}
               {s.employee_count ? <span>{compactNum(s.employee_count)} employees</span> : null}
+              {/* The company's own accounts, only where a real source published
+                  them: the site itself, or the directory it came from. */}
+              {s.company_linkedin_url && (
+                <a href={s.company_linkedin_url} target="_blank" rel="noreferrer noopener"
+                   className="font-semibold text-brand-text hover:underline">
+                  LinkedIn ↗
+                </a>
+              )}
+              {s.company_twitter_url && (
+                <a href={s.company_twitter_url} target="_blank" rel="noreferrer noopener"
+                   className="font-semibold text-brand-text hover:underline">
+                  X ↗
+                </a>
+              )}
+              {s.company_github_org && (
+                <a href={`https://github.com/${s.company_github_org}`} target="_blank" rel="noreferrer noopener"
+                   className="font-semibold text-brand-text hover:underline">
+                  GitHub ↗
+                </a>
+              )}
               {s.website && (
                 <a href={s.website} target="_blank" rel="noreferrer noopener" className="font-semibold text-brand-text hover:underline">
                   {s.website.replace(/^https?:\/\//, "").replace(/\/$/, "")} ↗
@@ -728,9 +752,11 @@ export default function StartupDetail() {
             <SectionHeader
               title={`Founders (${s.founders.length})`}
               description={
-                isSeeded
+                foundersAreModelled
                   ? "We did not collect who founded this company. The profiles below are modelled, not real people."
-                  : undefined
+                  : isSeeded
+                    ? "Names from the public funding records this company was imported from. The credibility signals beside them are modelled."
+                    : undefined
               }
             />
             {s.founders.length ? (

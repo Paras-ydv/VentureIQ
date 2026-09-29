@@ -69,6 +69,8 @@ export type Stage = "idea" | "seed" | "series_a" | "series_b_plus" | "growth";
 export interface StartupSummary {
   startup_id: string;
   legal_name: string;
+  /** The company's own logo, when a real source published one. */
+  logo_url?: string | null;
   stage: Stage;
   sector: string;
   sub_vertical: string | null;
@@ -115,6 +117,8 @@ export interface Founder {
   founder_id: string;
   name: string;
   role: string | null;
+  /** Where the name came from. "modelled" means it is a placeholder. */
+  name_source?: string | null;
   linkedin_url: string | null;
   github_username: string | null;
   prior_exits: number | null;
@@ -171,6 +175,10 @@ export interface StartupDetail extends StartupSummary {
   yc_batch?: string | null;
   /** True when the signed-in viewer owns this company. */
   owned_by_me?: boolean;
+  logo_source?: string | null;
+  company_linkedin_url?: string | null;
+  company_twitter_url?: string | null;
+  company_github_org?: string | null;
   cin: string | null;
   gstin: string | null;
   created_at: string;
@@ -533,6 +541,7 @@ export interface WatchlistItem {
   startup: {
     startup_id: string;
     legal_name: string;
+    logo_url?: string | null;
     sector: string;
     stage: Stage;
     hq_city: string | null;

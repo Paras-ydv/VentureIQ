@@ -75,7 +75,7 @@ export function StartupTable({
                   onClick={() => onOpen?.(s.startup_id)}
                   className="flex min-w-0 items-center gap-3"
                 >
-                  <LogoTile name={s.legal_name} size={32} />
+                  <LogoTile name={s.legal_name} src={s.logo_url} size={32} />
                   <span className="min-w-0">
                     <span className="flex items-center gap-1.5">
                       <span className="max-w-[190px] truncate font-bold text-brand-text hover:underline">{s.legal_name}</span>
