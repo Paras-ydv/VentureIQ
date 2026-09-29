@@ -256,6 +256,25 @@ A `startup` is linked to a registry company by `startup.cin`.
 | `computed_at` | timestamp | |
 | `is_current` | bool | scoring appends rather than overwrites, so a startup keeps its history; exactly one row per startup is current. **SQL that joins this table must filter on it**, or a rescored startup is counted several times in aggregates and sorted on an arbitrary old row |
 
+### 3.1b `mentorship_offer`
+Someone offering time rather than money, and the founder's answer. Deliberately
+outside the marketplace: advice is not a security, so no KYC, accreditation or
+right-of-first-refusal applies. Visibility is the founder's, taken at the moment
+they accept.
+
+| Field | Type | Notes |
+|---|---|---|
+| `offer_id` | UUID **PK** | |
+| `startup_id` | FK | |
+| `mentor_user_id` | FK → `app_user` | unique together with `startup_id`: one live offer per pair |
+| `message` | text | the mentor's pitch — visible only to the two parties, never on the public profile |
+| `focus_areas` | jsonb | from a fixed list (Go-to-market, Hiring, Pricing, …) so a founder can triage a queue |
+| `hours_per_month` | int | what they are committing to |
+| `status` | string | `offered` → `accepted` \| `declined`, or `withdrawn` by the mentor |
+| `public` | bool | **the consent gate.** An accepted mentor appears on the company's public profile only when this is true; the founder can flip it at any time |
+| `founder_note` | text | private reply |
+| `created_at` / `decided_at` | timestamp | |
+
 ### 3.2 `match_recommendation`
 | Field | Type | Notes |
 |---|---|---|

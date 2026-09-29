@@ -169,6 +169,8 @@ export interface StartupDetail extends StartupSummary {
   founded_date: string | null;
   /** Y Combinator batch, e.g. "Winter 2022". Not a founding date. */
   yc_batch?: string | null;
+  /** True when the signed-in viewer owns this company. */
+  owned_by_me?: boolean;
   cin: string | null;
   gstin: string | null;
   created_at: string;
@@ -207,6 +209,25 @@ export interface Investor {
     geographic_preference: string[];
     risk_tolerance: string;
   } | null;
+}
+
+export interface MentorOffer {
+  offer_id: string;
+  startup_id: string;
+  mentor_name: string;
+  mentor_firm: string | null;
+  focus_areas: string[];
+  status: "offered" | "accepted" | "declined" | "withdrawn";
+  public: boolean;
+  created_at: string;
+  decided_at: string | null;
+  /** Only present for the founder and the mentor themselves. */
+  message?: string | null;
+  hours_per_month?: number | null;
+  founder_note?: string | null;
+  mentor_email?: string | null;
+  startup_name?: string | null;
+  startup_sector?: string | null;
 }
 
 export interface PlatformStats {
@@ -637,6 +658,26 @@ export const api = {
     request<KycCase>(`/kyc/${caseId}/decide?approve=${approve}${note ? `&note=${encodeURIComponent(note)}` : ""}`, {
       method: "POST",
     }),
+
+  mentorFocusAreas: () => request<{ focus_areas: string[] }>("/mentorship/focus-areas"),
+  mentorsOf: (startupId: string) =>
+    request<{ mentors: MentorOffer[]; my_offer: MentorOffer | null }>(
+      `/mentorship/startups/${startupId}/mentors`,
+    ),
+  offerMentorship: (body: {
+    startup_id: string;
+    message?: string | null;
+    focus_areas: string[];
+    hours_per_month?: number | null;
+  }) => request<MentorOffer>("/mentorship/offers", { method: "POST", body: JSON.stringify(body) }),
+  withdrawMentorship: (offerId: string) =>
+    request<void>(`/mentorship/offers/${offerId}`, { method: "DELETE" }),
+  mentorshipInbox: (startupId: string) =>
+    request<MentorOffer[]>(`/mentorship/startups/${startupId}/offers`),
+  decideMentorship: (offerId: string, body: { accept: boolean; public?: boolean; founder_note?: string }) =>
+    request<MentorOffer>(`/mentorship/offers/${offerId}/decide`, { method: "POST", body: JSON.stringify(body) }),
+  setMentorVisibility: (offerId: string, isPublic: boolean) =>
+    request<MentorOffer>(`/mentorship/offers/${offerId}/visibility?public=${isPublic}`, { method: "PATCH" }),
 
   marketRules: () =>
     request<{ simulated: boolean; disclaimer: string; accredited_threshold_usd: number; rules: MarketRule[] }>(

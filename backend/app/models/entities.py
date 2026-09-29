@@ -495,3 +495,44 @@ class AuditLog(Base):
     entity_id: Mapped[str | None] = mapped_column(String(36))
     detail: Mapped[dict | None] = mapped_column(JSON)
     timestamp: Mapped[datetime] = mapped_column(DateTime, default=_now, index=True)
+
+
+class MentorshipOffer(Base):
+    """Someone offering to mentor a company, and the founder's answer.
+
+    Distinct from an investment offer on purpose: money and advice travel
+    separately, and an investor who is not writing a cheque may still be the
+    most useful person on a cap table. No money, no equity, no compliance
+    gate --- the founder simply accepts or declines.
+
+    `public` is the founder's call, taken at the moment they accept: an
+    accepted mentor appears on the company's public profile only if the
+    founder said so. A declined or pending offer is never public, and only the
+    two parties can see it.
+    """
+
+    __tablename__ = "mentorship_offer"
+    __table_args__ = (
+        UniqueConstraint("mentor_user_id", "startup_id", name="uq_mentor_startup"),
+    )
+
+    offer_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    startup_id: Mapped[str] = mapped_column(ForeignKey("startup.startup_id"), index=True)
+    mentor_user_id: Mapped[str] = mapped_column(ForeignKey("app_user.user_id"), index=True)
+
+    # What the mentor is offering, in their own words, plus a short tag list
+    # ("go-to-market", "hiring") so a founder can scan a queue of them.
+    message: Mapped[str | None] = mapped_column(Text)
+    focus_areas: Mapped[list | None] = mapped_column(JSON)
+    hours_per_month: Mapped[int | None] = mapped_column(Integer)
+
+    # offered -> accepted | declined, or withdrawn by the mentor.
+    status: Mapped[str] = mapped_column(String(16), default="offered", index=True)
+    public: Mapped[bool] = mapped_column(Boolean, default=False)
+    founder_note: Mapped[str | None] = mapped_column(Text)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+    startup: Mapped[Startup] = relationship()
+    mentor: Mapped[User] = relationship()

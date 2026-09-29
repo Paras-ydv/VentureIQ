@@ -8,11 +8,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import case, func, or_
 from sqlalchemy.orm import Session, selectinload
 
+from app.api.deps import optional_user
 from app.core.database import get_db
 from app.enrichment.agent import attach_mock_founders, enrich_startup
 from app.ml import rag
 from app.ml.scoring import compute_scores
-from app.models import AuditLog, Founder, Score, Startup, StartupFinancials
+from app.models import AuditLog, Founder, Score, Startup, StartupFinancials, User
 from app.schemas.dto import (
     BenchmarkOut,
     PaginatedStartups,
@@ -156,7 +157,11 @@ def list_sectors(db: Session = Depends(get_db)):
 
 
 @router.get("/{startup_id}", response_model=StartupDetail)
-def get_startup(startup_id: str, db: Session = Depends(get_db)):
+def get_startup(
+    startup_id: str,
+    db: Session = Depends(get_db),
+    user: User | None = Depends(optional_user),
+):
     s = (
         db.query(Startup)
         .options(
@@ -180,6 +185,9 @@ def get_startup(startup_id: str, db: Session = Depends(get_db)):
             "hq_state": s.hq_state,
             "founded_date": s.founded_date,
             "yc_batch": s.yc_batch,
+            # Whether the viewer owns this company, so the page can offer the
+            # founder's actions. The owner's identity itself stays private.
+            "owned_by_me": bool(user and s.owner_user_id and s.owner_user_id == user.user_id),
             "cin": s.cin,
             "gstin": s.gstin,
             "created_at": s.created_at,
@@ -198,12 +206,21 @@ def get_startup(startup_id: str, db: Session = Depends(get_db)):
 
 
 @router.post("", response_model=StartupDetail, status_code=201)
-def create_startup(payload: StartupIn, db: Session = Depends(get_db)):
+def create_startup(
+    payload: StartupIn,
+    db: Session = Depends(get_db),
+    user: User | None = Depends(optional_user),
+):
     """Register a startup.
 
     Pydantic has already enforced the stage-conditional rules (an idea-stage
     company is not asked for burn rate; a seed-stage one must supply it) --- this
     is the server half of the two-layer validation the report specifies.
+
+    A signed-in founder owns what they submit here, exactly as they would
+    through the agent. Without that the company never reaches "My companies",
+    cannot be listed, and has nobody who can accept a mentorship offer.
+    Anonymous submission still works; the company is simply unclaimed.
     """
     s = Startup(
         legal_name=payload.legal_name,
@@ -220,6 +237,7 @@ def create_startup(payload: StartupIn, db: Session = Depends(get_db)):
         long_description=payload.long_description,
         employee_count=payload.employee_count,
         source="registration",
+        owner_user_id=user.user_id if user and user.role == "founder" else None,
     )
     db.add(s)
     db.flush()
@@ -252,7 +270,9 @@ def create_startup(payload: StartupIn, db: Session = Depends(get_db)):
     compute_scores(db, s, cohort_stats=_cohort_stats(db, s))
     db.commit()
     rag.INDEX.built = False  # corpus changed; rebuild lazily on next retrieval
-    return get_startup(s.startup_id, db)
+    # Pass the caller through: FastAPI only resolves Depends() at the route
+    # boundary, so calling this as a plain function leaves it unresolved.
+    return get_startup(s.startup_id, db, user)
 
 
 @router.post("/{startup_id}/score")

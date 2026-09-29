@@ -5,6 +5,7 @@ import { api, type MyStartup } from "../lib/api";
 import { relativeTime, scoreBand, stageLabel } from "../lib/format";
 import { Badge, Card, Empty, LogoTile, SectionError, SkeletonRows } from "../components/primitives";
 import { useToast } from "../components/ui/Toast";
+import { MentorInbox } from "../components/Mentorship";
 
 /** What a founder sees about the companies they registered: the four scores as
  *  investors see them, open flags, and what is still unverified. */
@@ -181,6 +182,8 @@ export default function MyCompanies() {
                     </div>
                   </div>
                 )}
+
+                <MentorInbox startupId={s.startup_id} startupName={s.legal_name} />
               </m.div>
             );
           })}

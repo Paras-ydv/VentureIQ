@@ -28,6 +28,7 @@ import {
   VerifiedBadge,
 } from "../components/primitives";
 import { useInvestor } from "../lib/investor-context";
+import { MentorsPanel } from "../components/Mentorship";
 
 const DIMENSIONS = [
   { key: "growth_potential", label: "Growth potential", scoreKey: "growth_potential_score" },
@@ -593,6 +594,8 @@ export default function StartupDetail() {
               </div>
             </Card>
           )}
+
+          <MentorsPanel startupId={s.startup_id} ownerIsMe={!!s.owned_by_me} />
 
           <Card id="financials" className="scroll-mt-24 p-5 sm:p-6">
             <SectionHeader

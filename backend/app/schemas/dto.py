@@ -202,6 +202,7 @@ class StartupDetail(StartupSummary):
     hq_state: str | None = None
     founded_date: date | None = None
     yc_batch: str | None = None
+    owned_by_me: bool = False
     cin: str | None = None
     gstin: str | None = None
     created_at: datetime
