@@ -1,0 +1,541 @@
+{
+  "table3_sources": {
+    "cin_check": {
+      "calls": 42,
+      "responded_pct": 100.0,
+      "usable_pct": 100.0,
+      "median_s": null,
+      "p95_s": null,
+      "from_local_copy_pct": null,
+      "errors": []
+    },
+    "corpus": {
+      "calls": 47,
+      "responded_pct": 100.0,
+      "usable_pct": 2.1,
+      "median_s": 0.02,
+      "p95_s": 0.05,
+      "from_local_copy_pct": null,
+      "errors": []
+    },
+    "dns": {
+      "calls": 42,
+      "responded_pct": 100.0,
+      "usable_pct": 100.0,
+      "median_s": 0.16,
+      "p95_s": 0.32,
+      "from_local_copy_pct": null,
+      "errors": []
+    },
+    "email": {
+      "calls": 42,
+      "responded_pct": 100.0,
+      "usable_pct": 100.0,
+      "median_s": 0.14,
+      "p95_s": 0.21,
+      "from_local_copy_pct": null,
+      "errors": []
+    },
+    "github_org": {
+      "calls": 37,
+      "responded_pct": 100.0,
+      "usable_pct": 35.1,
+      "median_s": 0.75,
+      "p95_s": 5.29,
+      "from_local_copy_pct": null,
+      "errors": []
+    },
+    "linkedin_company": {
+      "calls": 24,
+      "responded_pct": 100.0,
+      "usable_pct": 100.0,
+      "median_s": 0.4,
+      "p95_s": 0.4,
+      "from_local_copy_pct": null,
+      "errors": []
+    },
+    "mca21": {
+      "calls": 42,
+      "responded_pct": 100.0,
+      "usable_pct": 100.0,
+      "median_s": 0.0,
+      "p95_s": 0.0,
+      "from_local_copy_pct": 100.0,
+      "errors": []
+    },
+    "rdap": {
+      "calls": 42,
+      "responded_pct": 95.2,
+      "usable_pct": 95.2,
+      "median_s": 1.29,
+      "p95_s": 3.26,
+      "from_local_copy_pct": null,
+      "errors": [
+        "No RDAP record for hasura.io (some country TLDs don't publish one)",
+        "No RDAP record for wakefit.co (some country TLDs don't publish one)"
+      ]
+    },
+    "sector_model": {
+      "calls": 38,
+      "responded_pct": 100.0,
+      "usable_pct": 100.0,
+      "median_s": null,
+      "p95_s": null,
+      "from_local_copy_pct": null,
+      "errors": []
+    },
+    "website": {
+      "calls": 42,
+      "responded_pct": 88.1,
+      "usable_pct": 88.1,
+      "median_s": 1.46,
+      "p95_s": 4.09,
+      "from_local_copy_pct": null,
+      "errors": [
+        "Couldn't read makemytrip.com: ",
+        "lenskart.com answered HTTP 403",
+        "meesho.com answered HTTP 403",
+        "swiggy.com answered HTTP 403",
+        "zomato.com's robots.txt asks automated agents not to read this page"
+      ]
+    },
+    "_end_to_end": {
+      "runs": 42,
+      "completed_pct": 100.0,
+      "median_s": 5.38,
+      "p95_s": 11.83
+    }
+  },
+  "table2_verification": {
+    "companies": 42,
+    "fields": {
+      "legal_name": {
+        "coverage_pct": 100.0,
+        "rules": {
+          "outvote": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "false_positive_rate": 0.0,
+            "tp": 42,
+            "fn": 0,
+            "fp": 0,
+            "tn": 42
+          },
+          "any_disagreement": {
+            "precision": 0.689,
+            "recall": 1.0,
+            "false_positive_rate": 0.452,
+            "tp": 42,
+            "fn": 0,
+            "fp": 19,
+            "tn": 23
+          },
+          "authority_aware": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "false_positive_rate": 0.0,
+            "tp": 42,
+            "fn": 0,
+            "fp": 0,
+            "tn": 42
+          }
+        }
+      },
+      "founded_year": {
+        "coverage_pct": 100.0,
+        "rules": {
+          "outvote": {
+            "precision": 1.0,
+            "recall": 0.714,
+            "false_positive_rate": 0.0,
+            "tp": 60,
+            "fn": 24,
+            "fp": 0,
+            "tn": 42
+          },
+          "any_disagreement": {
+            "precision": 0.894,
+            "recall": 1.0,
+            "false_positive_rate": 0.238,
+            "tp": 84,
+            "fn": 0,
+            "fp": 10,
+            "tn": 32
+          },
+          "authority_aware": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "false_positive_rate": 0.0,
+            "tp": 84,
+            "fn": 0,
+            "fp": 0,
+            "tn": 42
+          }
+        }
+      },
+      "hq_city": {
+        "coverage_pct": 100.0,
+        "rules": {
+          "outvote": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "false_positive_rate": 0.0,
+            "tp": 41,
+            "fn": 0,
+            "fp": 0,
+            "tn": 41
+          },
+          "any_disagreement": {
+            "precision": 0.774,
+            "recall": 1.0,
+            "false_positive_rate": 0.293,
+            "tp": 41,
+            "fn": 0,
+            "fp": 12,
+            "tn": 29
+          },
+          "authority_aware": {
+            "precision": 0.774,
+            "recall": 1.0,
+            "false_positive_rate": 0.293,
+            "tp": 41,
+            "fn": 0,
+            "fp": 12,
+            "tn": 29
+          }
+        }
+      },
+      "hq_state": {
+        "coverage_pct": 100.0,
+        "rules": {
+          "outvote": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "false_positive_rate": 0.0,
+            "tp": 42,
+            "fn": 0,
+            "fp": 0,
+            "tn": 42
+          },
+          "any_disagreement": {
+            "precision": 0.875,
+            "recall": 1.0,
+            "false_positive_rate": 0.143,
+            "tp": 42,
+            "fn": 0,
+            "fp": 6,
+            "tn": 36
+          },
+          "authority_aware": {
+            "precision": 0.875,
+            "recall": 1.0,
+            "false_positive_rate": 0.143,
+            "tp": 42,
+            "fn": 0,
+            "fp": 6,
+            "tn": 36
+          }
+        }
+      }
+    },
+    "cin": {
+      "another company's CIN": {
+        "n": 42,
+        "caught_pct": {
+          "outvote": 92.9,
+          "any_disagreement": 100.0,
+          "authority_aware": 100.0
+        },
+        "registry_outcomes": {
+          "resolved": 42
+        },
+        "caught_via": {
+          "legal_name": 42,
+          "founded_year": 33,
+          "hq_city": 33,
+          "hq_state": 34,
+          "cin": 0
+        }
+      },
+      "one digit changed": {
+        "n": 42,
+        "caught_pct": {
+          "outvote": 92.9,
+          "any_disagreement": 95.2,
+          "authority_aware": 95.2
+        },
+        "registry_outcomes": {
+          "not in register": 37,
+          "registry unreachable (ReadTimeout)": 3,
+          "resolved": 2
+        },
+        "caught_via": {
+          "legal_name": 20,
+          "founded_year": 9,
+          "hq_city": 12,
+          "hq_state": 6,
+          "cin": 39
+        }
+      }
+    },
+    "domain_age_rdap": {
+      "backdated": {
+        "caught": 21,
+        "of": 42
+      },
+      "postdated": {
+        "caught": 0,
+        "of": 42
+      }
+    },
+    "name_typo_tolerated": {
+      "accepted": 40,
+      "of": 42
+    },
+    "false_positives_on_correct_claims": [
+      {
+        "company": "Spinny",
+        "field": "hq_city",
+        "claimed": "Gurugram",
+        "disagreeing_sources": [
+          "website"
+        ]
+      },
+      {
+        "company": "BrowserStack",
+        "field": "hq_city",
+        "claimed": "Mumbai",
+        "disagreeing_sources": [
+          "website"
+        ]
+      },
+      {
+        "company": "CRED",
+        "field": "hq_city",
+        "claimed": "Mumbai",
+        "disagreeing_sources": [
+          "github_org"
+        ]
+      },
+      {
+        "company": "Mamaearth",
+        "field": "hq_city",
+        "claimed": "Delhi",
+        "disagreeing_sources": [
+          "website"
+        ]
+      },
+      {
+        "company": "Mamaearth",
+        "field": "hq_state",
+        "claimed": "Delhi",
+        "disagreeing_sources": [
+          "website"
+        ]
+      },
+      {
+        "company": "Freshworks",
+        "field": "hq_city",
+        "claimed": "Chennai",
+        "disagreeing_sources": [
+          "website"
+        ]
+      },
+      {
+        "company": "Freshworks",
+        "field": "hq_state",
+        "claimed": "Tamil Nadu",
+        "disagreeing_sources": [
+          "website"
+        ]
+      },
+      {
+        "company": "Wakefit",
+        "field": "hq_city",
+        "claimed": "Bengaluru",
+        "disagreeing_sources": [
+          "website"
+        ]
+      },
+      {
+        "company": "Wakefit",
+        "field": "hq_state",
+        "claimed": "Karnataka",
+        "disagreeing_sources": [
+          "website"
+        ]
+      },
+      {
+        "company": "Chargebee",
+        "field": "hq_city",
+        "claimed": "Chennai",
+        "disagreeing_sources": [
+          "website"
+        ]
+      },
+      {
+        "company": "Chargebee",
+        "field": "hq_state",
+        "claimed": "Tamil Nadu",
+        "disagreeing_sources": [
+          "website"
+        ]
+      },
+      {
+        "company": "Dream11",
+        "field": "hq_city",
+        "claimed": "Mumbai",
+        "disagreeing_sources": [
+          "github_org"
+        ]
+      },
+      {
+        "company": "Fyle",
+        "field": "hq_city",
+        "claimed": "Bengaluru",
+        "disagreeing_sources": [
+          "website"
+        ]
+      },
+      {
+        "company": "Fyle",
+        "field": "hq_state",
+        "claimed": "Karnataka",
+        "disagreeing_sources": [
+          "website"
+        ]
+      },
+      {
+        "company": "Paytm",
+        "field": "hq_city",
+        "claimed": "Delhi",
+        "disagreeing_sources": [
+          "github_org"
+        ]
+      },
+      {
+        "company": "PharmEasy",
+        "field": "hq_city",
+        "claimed": "Thane",
+        "disagreeing_sources": [
+          "website"
+        ]
+      },
+      {
+        "company": "PharmEasy",
+        "field": "hq_state",
+        "claimed": "Maharashtra",
+        "disagreeing_sources": [
+          "website"
+        ]
+      },
+      {
+        "company": "Urban Company",
+        "field": "hq_city",
+        "claimed": "Delhi",
+        "disagreeing_sources": [
+          "website"
+        ]
+      }
+    ]
+  },
+  "table4_models": {
+    "growth": {
+      "data": "1,896 labelled Y Combinator companies (830 acquired or public, 1066 inactive; active companies excluded as unresolved)",
+      "predicts": "P(acquired or public) vs inactive",
+      "holdout_auroc": 0.7411,
+      "cv5_auroc_mean": 0.7346,
+      "cv5_auroc_sd": 0.0088,
+      "cv5_auroc_without_top_company_flag": 0.7299,
+      "cv5_auroc_age_only_baseline": 0.5304
+    },
+    "survival": {
+      "n_companies": 1193843,
+      "dissolved_rate": 0.2751,
+      "auroc": 0.9041,
+      "auroc_age_only_baseline": 0.8295,
+      "brier": 0.1074,
+      "by_age_band": [
+        {
+          "age_band": "0-3y",
+          "n": 51951,
+          "dissolved_rate": 0.0086,
+          "auroc": 0.7902
+        },
+        {
+          "age_band": "3-7y",
+          "n": 52868,
+          "dissolved_rate": 0.0888,
+          "auroc": 0.7815
+        },
+        {
+          "age_band": "7-12y",
+          "n": 42597,
+          "dissolved_rate": 0.241,
+          "auroc": 0.7135
+        },
+        {
+          "age_band": "12-20y",
+          "n": 42055,
+          "dissolved_rate": 0.5022,
+          "auroc": 0.7636
+        },
+        {
+          "age_band": "20-125y",
+          "n": 49298,
+          "dissolved_rate": 0.5914,
+          "auroc": 0.8974
+        }
+      ]
+    },
+    "fraud": {
+      "data": "8,512 financial profiles; 2,128 held out as clean",
+      "features": [
+        "log_revenue",
+        "log_burn",
+        "runway_months",
+        "ltv_cac_ratio",
+        "revenue_growth_pct",
+        "log_total_funding",
+        "burn_per_head",
+        "revenue_per_head",
+        "sam_tam_ratio",
+        "gst_revenue_deviation"
+      ],
+      "injections": {
+        "revenue inflated 10x": {
+          "auroc": 0.5589,
+          "detected_at_fpr_1pct": 0.02,
+          "detected_at_fpr_5pct": 0.083,
+          "detected_at_fpr_10pct": 0.136
+        },
+        "revenue 60% above GST turnover": {
+          "auroc": 0.8768,
+          "detected_at_fpr_1pct": 0.02,
+          "detected_at_fpr_5pct": 0.117,
+          "detected_at_fpr_10pct": 0.324
+        },
+        "LTV:CAC inflated 8x": {
+          "auroc": 0.8971,
+          "detected_at_fpr_1pct": 0.02,
+          "detected_at_fpr_5pct": 0.172,
+          "detected_at_fpr_10pct": 0.517
+        },
+        "runway inconsistent with burn (6x)": {
+          "auroc": 0.7303,
+          "detected_at_fpr_1pct": 0.015,
+          "detected_at_fpr_5pct": 0.112,
+          "detected_at_fpr_10pct": 0.227
+        },
+        "growth claimed at 2000%": {
+          "auroc": 0.7345,
+          "detected_at_fpr_1pct": 0.012,
+          "detected_at_fpr_5pct": 0.076,
+          "detected_at_fpr_10pct": 0.148
+        }
+      },
+      "caveat": "The profiles are modelled from public funding records, not reported, and the GST deviation feature is derived from simulated turnover. These rates measure the detector's sensitivity to the injected patterns, not real-world fraud detection."
+    }
+  },
+  "generated_at": "2026-11-09 21:44:15"
+}
