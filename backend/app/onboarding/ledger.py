@@ -155,15 +155,40 @@ def reconcile(
             live_disagree = [e for e, v in verdicts if v == "disagree" and _live(e)]
             soft_agree = [e for e, v in verdicts if v == "agree" and not _live(e)]
             soft_disagree = [e for e, v in verdicts if v == "disagree" and not _live(e)]
-            if live_disagree and not live_agree:
-                best = _pick(live_disagree)
+            # When sources disagree with each other, who wins? An authoritative
+            # source for the field (`prefer`, e.g. the registry for the legal
+            # name and incorporation date) decides on its own. Without one, any
+            # disagreement goes to a person.
+            #
+            # The old rule let any agreeing source outvote any disagreeing one.
+            # A founder claimed Zerodha was founded in 2010, their own website
+            # said 2010, the MCA registry said 2018 --- and the field came out
+            # "verified, matches company website". The opposite rule, "any
+            # disagreement is a conflict", flags every company that trades
+            # under a brand: Mamaearth's site disagrees with its registered
+            # name, Honasa Consumer Limited, which is nonetheless correct.
+            auth_disagree = [e for e in live_disagree if e.get("prefer")]
+            auth_agree = [e for e in live_agree if e.get("prefer")]
+            if auth_disagree or (live_disagree and not auth_agree):
+                pool = auth_disagree or live_disagree
+                best = _pick(pool)
                 if best and best.get("suggest", True):
                     suggestion = {"value": best["value"], "source": best["source"]}
-                note = live_disagree[0].get("note") or ""
+                note = pool[0].get("note") or ""
+                if live_agree:
+                    note = (f"{', '.join(sorted({e['label'] for e in live_agree}))} agrees; "
+                            f"{', '.join(sorted({e['label'] for e in pool}))} does not"
+                            + (f" — {note}" if note else ""))
                 status = "disputed" if override.get("resolution") == "keep" else "conflict"
             elif live_agree:
                 status = "verified"
                 note = f"Matches {', '.join(sorted({e['label'] for e in live_agree}))}"
+                if live_disagree:
+                    # Settled by the authoritative source, but the dissent is
+                    # still worth seeing: a brand name, a registered office
+                    # that is not where the team sits.
+                    dissent = live_disagree[0]
+                    note += f"; {dissent['label']} shows “{dissent['value']}”"
             elif any(e.get("blocking") for e in soft_disagree):
                 # A failed local check (bad check digit) is a hard stop.
                 status = "disputed" if override.get("resolution") == "keep" else "conflict"

@@ -111,3 +111,56 @@ class TestStageRules:
     def test_website_is_optional_so_a_pre_launch_company_can_register(self):
         out = reconcile({**BASE, "legal_name": "Stealth Co"}, {}, {})
         assert "website" not in out["blocking"]
+
+
+def test_an_independent_source_that_disagrees_is_never_outvoted():
+    """One agreeing source must not hide another that disagrees.
+
+    The founder's own website agreeing with their claim is the weakest
+    evidence there is; the registry contradicting it is the strongest. The
+    result has to be a conflict a person resolves, naming both sides.
+    """
+    from app.onboarding.ledger import reconcile
+
+    evidence = {"founded_year": [
+        {"source": "website", "tool": "website", "label": "Company website",
+         "kind": "network", "value": 2010, "note": ""},
+        {"source": "mca21", "tool": "mca21", "label": "MCA registry",
+         "kind": "dataset", "value": 2018, "note": "Incorporated 2018-09-25", "prefer": True},
+    ]}
+    row = next(f for f in reconcile({"founded_year": 2010, "stage": "seed"}, evidence, {})["fields"]
+               if f["key"] == "founded_year")
+    assert row["status"] == "conflict"
+    assert row["suggestion"]["value"] == 2018
+    assert "Company website agrees" in row["note"] and "MCA registry does not" in row["note"]
+
+
+def test_the_authoritative_source_settles_a_brand_name():
+    """A company trading under a brand must not be flagged for giving its
+    registered name: the registry is the authority for that field."""
+    from app.onboarding.ledger import reconcile
+
+    evidence = {"legal_name": [
+        {"source": "website", "tool": "website", "label": "Company website",
+         "kind": "network", "value": "Mamaearth", "note": ""},
+        {"source": "mca21", "tool": "mca21", "label": "MCA registry",
+         "kind": "dataset", "value": "Honasa Consumer Limited", "note": "", "prefer": True},
+    ]}
+    row = next(f for f in reconcile({"legal_name": "Honasa Consumer Limited", "stage": "seed"},
+                                    evidence, {})["fields"] if f["key"] == "legal_name")
+    assert row["status"] == "verified"
+    assert "Mamaearth" in row["note"], "the website's dissent should still be visible"
+
+
+def test_without_an_authority_a_contradiction_goes_to_a_person():
+    from app.onboarding.ledger import reconcile
+
+    evidence = {"hq_city": [
+        {"source": "github_org", "tool": "github_org", "label": "GitHub", "kind": "network",
+         "value": "Bengaluru", "note": ""},
+        {"source": "mca21", "tool": "mca21", "label": "MCA registry", "kind": "dataset",
+         "value": "Mumbai", "note": "Registered office city"},
+    ]}
+    row = next(f for f in reconcile({"hq_city": "Bengaluru", "stage": "seed"}, evidence, {})["fields"]
+               if f["key"] == "hq_city")
+    assert row["status"] == "conflict"
