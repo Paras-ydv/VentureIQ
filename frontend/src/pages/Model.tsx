@@ -75,6 +75,49 @@ export default function Model() {
         />
       </div>
 
+      {m.survival && (
+        <Card className="p-5">
+          <SectionHeader
+            eyebrow="Second model · Indian outcomes"
+            title="Company survival, trained on the MCA register"
+            description={m.survival.predicts}
+          />
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <Stat
+              label="AUROC (held out)"
+              value={m.survival.auroc.toFixed(3)}
+              sub={`Age alone: ${m.survival.auroc_age_only_baseline.toFixed(3)}`}
+              accent="var(--color-brand)"
+            />
+            <Stat
+              label="Training companies"
+              value={compactNum(m.survival.n_companies)}
+              sub="Indian companies, official register"
+            />
+            <Stat
+              label="Struck off or dissolved"
+              value={`${(m.survival.dissolved_rate * 100).toFixed(1)}%`}
+              sub={`${compactNum(m.survival.n_dissolved)} companies`}
+            />
+            <Stat
+              label="Brier score"
+              value={m.survival.brier.toFixed(3)}
+              sub="Probability accuracy — lower is better"
+            />
+          </div>
+          {Array.isArray(m.survival.by_age_band) && (
+            <div className="mt-4 border-t border-line pt-4">
+              <div className="eyebrow mb-2">Within age bands — so it is not just reading company age</div>
+              <HBarChart
+                data={m.survival.by_age_band.map((b: any) => ({ label: `${b.age_band} old`, value: b.auroc }))}
+                valueFormat={(v: number) => v.toFixed(3)}
+                color="var(--color-series-1)"
+              />
+            </div>
+          )}
+        </Card>
+      )}
+
       <Card className="p-5">
         <SectionHeader
           eyebrow="Model selection"
